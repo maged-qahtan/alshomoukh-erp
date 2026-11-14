@@ -7,7 +7,7 @@ import { formatSAR } from "@/lib/accounting/validate-journal";
 import Operations from "./operations";
 
 type Account = { id: string; code: string; name_ar: string; type: string; is_posting: boolean; is_active: boolean };
-type Line = { account_id: string; debit: string; credit: string; description: string };
+type Line = { account_id: string; debit: string; credit: string; description: string; party_id?: string | null; cost_center_id?: string | null };
 type Entry = { id: string; entry_number: number; entry_date: string; description: string; status: string };
 
 const navItems = ["لوحة التحكم", "القيود اليومية", "دليل الحسابات", "العملاء والموردون", "مراكز التكلفة", "الأستاذ العام", "ميزان المراجعة", "قائمة الدخل", "العمليات", "الميزانية العمومية", "التدفقات النقدية", "ملخص الضريبة"];
@@ -245,6 +245,8 @@ export default function Dashboard() {
       debit: Number(line.debit) || 0,
       credit: Number(line.credit) || 0,
       description: line.description,
+      party_id: line.party_id ?? null,
+      cost_center_id: line.cost_center_id ?? null,
     }));
     if (parsed.some((line) => !line.account_id || line.debit < 0 || line.credit < 0 || (line.debit > 0) === (line.credit > 0))) {
       setNotice("راجع الحسابات والمبالغ: يجب إدخال مبلغ في جهة واحدة فقط لكل سطر."); return;
