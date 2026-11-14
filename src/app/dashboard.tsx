@@ -4,12 +4,13 @@ import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react
 import type { User } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/client";
 import { formatSAR } from "@/lib/accounting/validate-journal";
+import Operations from "./operations";
 
 type Account = { id: string; code: string; name_ar: string; type: string; is_posting: boolean; is_active: boolean };
 type Line = { account_id: string; debit: string; credit: string; description: string };
 type Entry = { id: string; entry_number: number; entry_date: string; description: string; status: string };
 
-const navItems = ["لوحة التحكم", "القيود اليومية", "دليل الحسابات", "العملاء والموردون", "مراكز التكلفة", "الأستاذ العام", "ميزان المراجعة", "قائمة الدخل"];
+const navItems = ["لوحة التحكم", "القيود اليومية", "دليل الحسابات", "العملاء والموردون", "مراكز التكلفة", "الأستاذ العام", "ميزان المراجعة", "قائمة الدخل", "العمليات"];
 const today = new Date().toISOString().slice(0, 10);
 
 export default function Dashboard() {
@@ -280,14 +281,14 @@ export default function Dashboard() {
       <div className="brand"><span className="brand-mark">ش</span><div><b>الشموخ ERP</b><small>النظام المحاسبي</small></div></div>
       <div className="company-switch"><small>الشركة الحالية</small><strong>{companyName}</strong></div>
       <div className="nav-caption">القائمة الرئيسية</div>
-      <nav>{navItems.map((item, index) => <button key={item} className={active === item ? "nav-item active" : "nav-item"} onClick={() => setActive(item)}><span>{["▦", "⇄", "☷", "♙", "⌖", "▤", "⚖", "↗"][index]}</span>{item}</button>)}</nav>
+      <nav>{navItems.map((item, index) => <button key={item} className={active === item ? "nav-item active" : "nav-item"} onClick={() => setActive(item)}><span>{["▦", "⇄", "☷", "♙", "⌖", "▤", "⚖", "↗", "▣"][index]}</span>{item}</button>)}</nav>
       <div className="sidebar-bottom"><span className="status-dot" /> متصل بقاعدة البيانات</div>
     </aside>
     <main className="main-area">
       <header className="topbar"><div><span className="breadcrumb">الرئيسية</span><span className="crumb-sep">/</span><b>{active}</b></div><div className="top-actions"><span className="currency-pill">SAR · ريال سعودي</span><button className="text-btn" onClick={signOut}>خروج</button></div></header>
       <div className="page-content">
         <section className="welcome-row"><div><div className="eyebrow">نظام الشموخ المحاسبي</div><h1>{active}</h1><p>إدارة دقيقة للحسابات والعمليات المالية من مكان واحد.</p></div>{active === "القيود اليومية" && <button className="primary-btn" onClick={() => setShowForm(true)}>＋ قيد يومي جديد</button>}</section>
-        {notice && <p className="notice">{notice}</p>}
+        {notice && <p className="notice">{notice}</p>}\n        {active === "العمليات" && <Operations supabase={supabase!} companyId={companyId!} appUserId={appUserId} />}
         {loadingData && <p>جارٍ تحميل بيانات الشركة…</p>}
         {active === "لوحة التحكم" && <section className="content-grid">
           <article className="panel"><div className="panel-heading"><div><h2>آخر القيود اليومية</h2><p>القيود المسجلة في قاعدة البيانات</p></div><button className="text-btn" onClick={() => setActive("القيود اليومية")}>عرض الكل ←</button></div>
