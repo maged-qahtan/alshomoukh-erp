@@ -19,6 +19,8 @@
 5. `0005_security_hardening.sql`
 6. `0006_security_onboarding_performance.sql`
 7. `0007_atomic_journal_drafts.sql`
+8. `0008_fix_period_rls_row_locks.sql`
+9. `0009_role_based_permissions.sql`
 
 بعدها اتبع `database/seeds/README.md` لإنشاء الشركة ودليل الحسابات. بعد تفعيل تسجيل المستخدم في Supabase Auth، أنشئ الحساب من شاشة النظام. أول مستخدم يسجل الدخول يستطيع إنشاء الشركة من معالج الإعداد؛ تنشئ وظيفة `bootstrap_company` ملف المستخدم والعضوية ودليل الحسابات والفترة المالية تلقائياً. لا تستخدم مفتاح Service Role في المتصفح.
 
