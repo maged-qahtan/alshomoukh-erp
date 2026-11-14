@@ -14,7 +14,7 @@ const navItems = ["لوحة التحكم", "القيود اليومية", "دل�
 const today = new Date().toISOString().slice(0, 10);
 const csvCell = (value: unknown) => '"' + String(value ?? "").replaceAll('"', '""') + '"';
 function downloadCsv(filename: string, rows: unknown[][]) {
-  const csv = "\\uFEFF" + rows.map((row) => row.map(csvCell).join(",")).join("\\r\\n");
+  const csv = "\uFEFF" + rows.map((row) => row.map(csvCell).join(",")).join("\r\n");
   const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
