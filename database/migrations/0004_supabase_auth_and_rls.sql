@@ -112,10 +112,10 @@ create policy "members create draft journal entries" on journal_entries
 for insert to authenticated
 with check (can_access_company(company_id) and status = 'draft');
 
-create policy "members update draft journal entries" on journal_entries
+create policy "members update company journal entries" on journal_entries
 for update to authenticated
-using (can_access_company(company_id) and status = 'draft')
-with check (can_access_company(company_id) and status = 'draft');
+using (can_access_company(company_id))
+with check (can_access_company(company_id));
 
 create policy "members read journal lines" on journal_lines
 for select to authenticated
