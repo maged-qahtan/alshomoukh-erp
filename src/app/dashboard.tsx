@@ -6,7 +6,7 @@ import { createClient } from "@/lib/supabase/client";
 import { formatSAR } from "@/lib/accounting/validate-journal";
 import Operations from "./operations";
 
-type Account = { id: string; code: string; name_ar: string; type: string; is_posting: boolean; is_active: boolean };
+type Account = { id: string; parent_id: string | null; code: string; name_ar: string; type: string; is_posting: boolean; is_active: boolean };
 type Line = { account_id: string; debit: string; credit: string; description: string; party_id?: string | null; cost_center_id?: string | null };
 type Entry = { id: string; entry_number: number; entry_date: string; description: string; status: string; source_type?: string };
 
@@ -45,6 +45,9 @@ export default function Dashboard() {
   const [yearEndPreview, setYearEndPreview] = useState<any>(null);
   const [retainedEarningsAccountId, setRetainedEarningsAccountId] = useState("");
   const [accounts, setAccounts] = useState<Account[]>([]);
+  const [accountSearch, setAccountSearch] = useState("");
+  const [accountTypeFilter, setAccountTypeFilter] = useState("all");
+  const [accountStatusFilter, setAccountStatusFilter] = useState("active");
   const [entries, setEntries] = useState<Entry[]>([]);
   const [trialBalance, setTrialBalance] = useState<any[]>([]);
   const [generalLedger, setGeneralLedger] = useState<any[]>([]);
@@ -114,7 +117,7 @@ export default function Dashboard() {
     setCompanyId(cid);
     const [companyResult, accountResult, periodResult, entryResult, balanceResult, ledgerResult, incomeResult, partyResult, centerResult, sheetResult, cashFlowResult, vatResult] = await Promise.all([
       supabase.from("companies").select("display_name,legal_name").eq("id", cid).single(),
-      supabase.from("accounts").select("id,code,name_ar,type,is_posting,is_active").eq("company_id", cid).eq("is_active", true).order("code"),
+      supabase.from("accounts").select("id,parent_id,code,name_ar,type,is_posting,is_active").eq("company_id", cid).order("code"),
       supabase.from("fiscal_periods").select("id,name,starts_on,ends_on,status").eq("company_id", cid).eq("status", "open").order("starts_on", { ascending: false }).limit(1).maybeSingle(),
       supabase.from("journal_entries").select("id,entry_number,entry_date,description,status,source_type").eq("company_id", cid).order("entry_date", { ascending: false }).limit(30),
       supabase.from("trial_balance").select("*").eq("company_id", cid).order("account_code"),
@@ -154,6 +157,28 @@ export default function Dashboard() {
       ]);
     }
   }, [accounts, lines.length]);
+
+  const accountRows = useMemo(() => {
+    const byId = new Map(accounts.map((account) => [account.id, account]));
+    const query = accountSearch.trim().toLocaleLowerCase();
+    return accounts
+      .filter((account) => accountTypeFilter === "all" || account.type === accountTypeFilter)
+      .filter((account) => accountStatusFilter === "all" || (accountStatusFilter === "active" ? account.is_active : !account.is_active))
+      .filter((account) => !query || account.code.toLocaleLowerCase().includes(query) || account.name_ar.toLocaleLowerCase().includes(query))
+      .sort((a, b) => a.code.localeCompare(b.code, "en", { numeric: true }))
+      .map((account) => {
+        let depth = 0;
+        let parentId = account.parent_id;
+        const visited = new Set<string>([account.id]);
+        while (parentId && byId.has(parentId) && !visited.has(parentId)) {
+          visited.add(parentId);
+          depth += 1;
+          parentId = byId.get(parentId)?.parent_id ?? null;
+        }
+        return { ...account, depth };
+      });
+  }, [accounts, accountSearch, accountTypeFilter, accountStatusFilter]);
+  const accountTypeLabel = (type: string) => ({ asset: "الأصول", liability: "الالتزامات", equity: "حقوق الملكية", revenue: "الإيرادات", expense: "المصروفات" } as Record<string, string>)[type] ?? type;
 
   const totals = useMemo(() => lines.reduce((sum, line) => ({
     debit: sum.debit + Math.round((Number(line.debit) || 0) * 100),
@@ -451,7 +476,26 @@ export default function Dashboard() {
           <p className="report-footnote">عدد القيود المعروضة: {filteredEntries.length} من {entries.length}</p>
           {selectedEntry && <section className="panel journal-detail"><div className="panel-heading"><div><h3>سند القيد رقم {selectedEntry.entry_number}</h3><p>{selectedEntry.entry_date} · {selectedEntry.status === "posted" ? "مرحّل" : selectedEntry.status === "reversed" ? "معكوس" : "مسودة"}</p></div><div className="report-actions"><button className="secondary-btn" onClick={()=>window.print()}>طباعة السند</button><button className="text-btn" onClick={()=>setSelectedEntry(null)}>إغلاق</button></div></div><p><b>البيان:</b> {selectedEntry.description}</p><div className="table-wrap"><table><thead><tr><th>الحساب</th><th>الطرف</th><th>مركز التكلفة</th><th>بيان السطر</th><th>مدين</th><th>دائن</th></tr></thead><tbody>{selectedEntry.lines.map((line:any)=><tr key={line.id}><td>{accounts.find(a=>a.id===line.account_id)?.code} — {accounts.find(a=>a.id===line.account_id)?.name_ar}</td><td>{parties.find((p:any)=>p.id===line.party_id)?.name || "—"}</td><td>{costCenters.find((c:any)=>c.id===line.cost_center_id)?.name_ar || "—"}</td><td>{line.description || "—"}</td><td>{formatSAR(Math.round(Number(line.debit)*100))}</td><td>{formatSAR(Math.round(Number(line.credit)*100))}</td></tr>)}</tbody></table></div></section>}
         </section>}
-        {active === "دليل الحسابات" && <section className="panel"><h2>دليل الحسابات</h2><div className="table-wrap"><table><thead><tr><th>الرمز</th><th>اسم الحساب</th><th>النوع</th><th>طبيعة الحساب</th></tr></thead><tbody>{accounts.map((a) => <tr key={a.id}><td>{a.code}</td><td>{a.name_ar}</td><td>{a.type}</td><td>{a.is_posting ? "حساب حركة" : "حساب تجميعي"}</td></tr>)}</tbody></table></div></section>}
+        {active === "دليل الحسابات" && <section className="panel account-directory">
+          <div className="panel-heading account-directory-heading"><div><h2>دليل الحسابات</h2><p>هيكل الحسابات الرئيسي والفرعي للشركة الحالية</p></div><button className="secondary-btn" onClick={() => downloadCsv("chart-of-accounts.csv", [["رمز الحساب","اسم الحساب","النوع","التصنيف","الحالة"], ...accountRows.map((a) => [a.code,a.name_ar,accountTypeLabel(a.type),a.is_posting ? "حساب حركة" : "حساب تجميعي",a.is_active ? "نشط" : "موقوف"])])}>تصدير الدليل</button></div>
+          <div className="account-stats">
+            <div><small>إجمالي الحسابات</small><strong>{accounts.length}</strong></div>
+            <div><small>حسابات الحركة</small><strong>{accounts.filter((a) => a.is_posting).length}</strong></div>
+            <div><small>الحسابات التجميعية</small><strong>{accounts.filter((a) => !a.is_posting).length}</strong></div>
+            <div><small>الحسابات النشطة</small><strong>{accounts.filter((a) => a.is_active).length}</strong></div>
+          </div>
+          <div className="account-filters">
+            <label className="account-search">البحث في الدليل<input value={accountSearch} onChange={(e) => setAccountSearch(e.target.value)} placeholder="ابحث برمز الحساب أو اسمه..." /></label>
+            <label>نوع الحساب<select value={accountTypeFilter} onChange={(e) => setAccountTypeFilter(e.target.value)}><option value="all">كل الأنواع</option><option value="asset">الأصول</option><option value="liability">الالتزامات</option><option value="equity">حقوق الملكية</option><option value="revenue">الإيرادات</option><option value="expense">المصروفات</option></select></label>
+            <label>الحالة<select value={accountStatusFilter} onChange={(e) => setAccountStatusFilter(e.target.value)}><option value="active">النشطة</option><option value="inactive">الموقوفة</option><option value="all">الكل</option></select></label>
+            <button className="text-btn" onClick={() => { setAccountSearch(""); setAccountTypeFilter("all"); setAccountStatusFilter("active"); }}>مسح الفلاتر</button>
+          </div>
+          <div className="table-wrap"><table className="account-tree-table"><thead><tr><th>رمز الحساب</th><th>اسم الحساب</th><th>التصنيف</th><th>طبيعة الحساب</th><th>الحالة</th></tr></thead><tbody>
+            {accountRows.map((a) => <tr key={a.id} className={!a.is_active ? "account-inactive" : ""}><td className="account-code-cell">{a.code}</td><td><div className="account-name-cell" style={{ paddingInlineStart: `${Math.min(a.depth, 6) * 20}px` }}><span className={a.parent_id ? "account-child-mark" : "account-root-mark"}>{a.parent_id ? "↳" : "▦"}</span><span>{a.name_ar}</span></div></td><td><span className={`account-type-pill type-${a.type}`}>{accountTypeLabel(a.type)}</span></td><td>{a.is_posting ? <span className="account-kind posting">حساب حركة</span> : <span className="account-kind group">حساب تجميعي</span>}</td><td><span className={a.is_active ? "account-status active" : "account-status inactive"}>{a.is_active ? "نشط" : "موقوف"}</span></td></tr>)}
+            {accountRows.length === 0 && <tr><td colSpan={5} className="account-empty">لا توجد حسابات مطابقة للفلاتر المحددة.</td></tr>}
+          </tbody></table></div>
+          <p className="report-footnote">يظهر ترتيب الحسابات بحسب الرمز، مع توضيح مستوى الحساب اعتماداً على الحساب الأب المسجل في قاعدة البيانات. النتائج: {accountRows.length} من {accounts.length}.</p>
+        </section>}
         {active === "ميزان المراجعة" && <section className="panel"><div className="panel-heading"><h2>ميزان المراجعة</h2><div className="report-actions"><button className="secondary-btn" onClick={() => downloadCsv("trial-balance.csv", [["رمز الحساب","الحساب","إجمالي مدين","إجمالي دائن","رصيد مدين","رصيد دائن"], ...trialBalance.map((a:any)=>[a.account_code,a.account_name,a.debit_total,a.credit_total,a.debit_balance,a.credit_balance])])}>تصدير Excel/CSV</button><button className="secondary-btn" onClick={() => window.print()}>طباعة</button></div></div><div className="table-wrap"><table><thead><tr><th>الرمز</th><th>الحساب</th><th>مدين</th><th>دائن</th><th>رصيد مدين</th><th>رصيد دائن</th></tr></thead><tbody>{trialBalance.map((a) => <tr key={a.account_id}><td>{a.account_code}</td><td>{a.account_name}</td><td>{formatSAR(Math.round(Number(a.debit_total) * 100))}</td><td>{formatSAR(Math.round(Number(a.credit_total) * 100))}</td><td>{formatSAR(Math.round(Number(a.debit_balance) * 100))}</td><td>{formatSAR(Math.round(Number(a.credit_balance) * 100))}</td></tr>)}</tbody></table></div><p className="report-footnote">إجمالي المدين: {formatSAR(Math.round(trialBalance.reduce((s:number,a:any)=>s+Number(a.debit_total||0),0)*100))} · إجمالي الدائن: {formatSAR(Math.round(trialBalance.reduce((s:number,a:any)=>s+Number(a.credit_total||0),0)*100))}</p></section>}
         {active === "مراكز التكلفة" && <section className="panel"><h2>مراكز التكلفة</h2><form className="journal-form" onSubmit={addCostCenter}><div className="form-fields"><label>الرمز<input required value={centerCode} onChange={(e) => setCenterCode(e.target.value)} placeholder="CC-001" /></label><label className="description-field">اسم مركز التكلفة<input required value={centerName} onChange={(e) => setCenterName(e.target.value)} placeholder="اسم الفرع أو القسم" /></label><button className="primary-btn" disabled={busy}>إضافة المركز</button></div></form><div className="table-wrap"><table><thead><tr><th>الرمز</th><th>اسم مركز التكلفة</th><th>الحالة</th></tr></thead><tbody>{costCenters.map((cc) => <tr key={cc.id}><td>{cc.code}</td><td>{cc.name_ar}</td><td>{cc.is_active ? "نشط" : "موقوف"}</td></tr>)}</tbody></table></div></section>}
         {active === "العملاء والموردون" && <section className="panel"><div className="panel-heading"><div><h2>سجل العملاء والموردين</h2><p>إدارة بيانات الأطراف وربطها بالقيود المحاسبية</p></div></div><form className="journal-form" onSubmit={addParty}><div className="form-fields"><label>نوع الطرف<select value={partyType} onChange={(e) => setPartyType(e.target.value)}><option value="customer">عميل</option><option value="supplier">مورد</option><option value="both">عميل ومورد</option></select></label><label>الرمز<input required value={partyCode} onChange={(e) => setPartyCode(e.target.value)} placeholder="C-001" /></label><label className="description-field">الاسم<input required value={partyName} onChange={(e) => setPartyName(e.target.value)} placeholder="اسم العميل أو المورد" /></label></div><div className="form-fields"><label>الهاتف<input value={partyPhone} onChange={(e) => setPartyPhone(e.target.value)} /></label><label>الرقم الضريبي<input value={partyTax} onChange={(e) => setPartyTax(e.target.value)} /></label><button className="primary-btn" disabled={busy}>حفظ الطرف</button></div></form><div className="table-wrap"><table><thead><tr><th>الرمز</th><th>الاسم</th><th>النوع</th><th>الهاتف</th><th>الرقم الضريبي</th></tr></thead><tbody>{parties.map((p) => <tr key={p.id}><td>{p.code}</td><td>{p.name}</td><td>{p.party_type === "customer" ? "عميل" : p.party_type === "supplier" ? "مورد" : "عميل ومورد"}</td><td>{p.phone || "—"}</td><td>{p.tax_number || "—"}</td></tr>)}</tbody></table></div></section>}
