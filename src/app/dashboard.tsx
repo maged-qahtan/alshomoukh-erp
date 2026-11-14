@@ -62,6 +62,7 @@ export default function Dashboard() {
   const [partyPhone, setPartyPhone] = useState("");
   const [partyTax, setPartyTax] = useState("");
   const [active, setActive] = useState("لوحة التحكم");
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [showForm, setShowForm] = useState(false);
   const [entryDate, setEntryDate] = useState(today);
   const [description, setDescription] = useState("");
@@ -354,15 +355,17 @@ export default function Dashboard() {
   </form></div>;
 
   return <div className="app-shell">
-    <aside className="sidebar">
+    {mobileMenuOpen && <button type="button" aria-label="إغلاق القائمة" className="sidebar-backdrop" onClick={() => setMobileMenuOpen(false)} />}
+    <aside className={mobileMenuOpen ? "sidebar sidebar-open" : "sidebar"}>
+      <button type="button" className="mobile-sidebar-close" aria-label="إغلاق القائمة" onClick={() => setMobileMenuOpen(false)}>×</button>
       <div className="brand"><span className="brand-mark">ش</span><div><b>الشموخ ERP</b><small>النظام المحاسبي</small></div></div>
       <div className="company-switch"><small>الشركة الحالية</small>{companies.length > 1 ? <select aria-label="اختيار الشركة" value={companyId ?? ""} onChange={(e) => { setCompanyId(e.target.value); setActive("لوحة التحكم"); setNotice(""); setLines([]); setShowForm(false); }}><option value="" disabled>اختر الشركة</option>{companies.map((company) => <option key={company.id} value={company.id}>{company.display_name || company.legal_name}</option>)}</select> : <strong>{companyName}</strong>}</div>
       <div className="nav-caption">القائمة الرئيسية</div>
-      <nav>{navItems.map((item, index) => <button key={item} className={active === item ? "nav-item active" : "nav-item"} onClick={() => setActive(item)}><span>{["▦", "⇄", "☷", "♙", "⌖", "▤", "⚖", "↗", "▣", "▤", "↕", "%"][index]}</span>{item}</button>)}</nav>
+      <nav>{navItems.map((item, index) => <button key={item} className={active === item ? "nav-item active" : "nav-item"} onClick={() => { setActive(item); setMobileMenuOpen(false); }}><span>{["▦", "⇄", "☷", "♙", "⌖", "▤", "⚖", "↗", "▣", "▤", "↕", "%"][index]}</span>{item}</button>)}</nav>
       <div className="sidebar-bottom"><span className="status-dot" /> متصل بقاعدة البيانات</div>
     </aside>
     <main className="main-area">
-      <header className="topbar"><div><span className="breadcrumb">الرئيسية</span><span className="crumb-sep">/</span><b>{active}</b></div><div className="top-actions"><span className="currency-pill">SAR · ريال سعودي</span><button className="text-btn" onClick={signOut}>خروج</button></div></header>
+      <header className="topbar"><div className="topbar-title"><button type="button" className="menu-toggle" aria-label="فتح القائمة" aria-expanded={mobileMenuOpen} onClick={() => setMobileMenuOpen(true)}>☰</button><div><span className="breadcrumb">{companyName || "الشركة"}</span><span className="crumb-sep">/</span><b>{active}</b></div></div><div className="top-actions"><span className="currency-pill">SAR · ريال سعودي</span><span className="user-chip">{user?.email || "المستخدم"}</span><button className="text-btn logout-btn" onClick={signOut}>تسجيل الخروج</button></div></header>
       <div className="page-content">
         <section className="welcome-row"><div><div className="eyebrow">نظام الشموخ المحاسبي</div><h1>{active}</h1><p>إدارة دقيقة للحسابات والعمليات المالية من مكان واحد.</p></div>{active === "القيود اليومية" && <button className="primary-btn" onClick={() => setShowForm(true)}>＋ قيد يومي جديد</button>}</section>
         {notice && <p className="notice">{notice}</p>}
