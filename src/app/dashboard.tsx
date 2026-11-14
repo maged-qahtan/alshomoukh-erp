@@ -10,7 +10,7 @@ type Account = { id: string; code: string; name_ar: string; type: string; is_pos
 type Line = { account_id: string; debit: string; credit: string; description: string };
 type Entry = { id: string; entry_number: number; entry_date: string; description: string; status: string };
 
-const navItems = ["لوحة التحكم", "القيود اليومية", "دليل الحسابات", "العملاء والموردون", "مراكز التكلفة", "الأستاذ العام", "ميزان المراجعة", "قائمة الدخل", "العمليات"];
+const navItems = ["لوحة التحكم", "القيود اليومية", "دليل الحسابات", "العملاء والموردون", "مراكز التكلفة", "الأستاذ العام", "ميزان المراجعة", "قائمة الدخل", "العمليات", "الميزانية العمومية", "التدفقات النقدية", "ملخص الضريبة"];
 const today = new Date().toISOString().slice(0, 10);
 
 export default function Dashboard() {
@@ -35,7 +35,7 @@ export default function Dashboard() {
   const [entries, setEntries] = useState<Entry[]>([]);
   const [trialBalance, setTrialBalance] = useState<any[]>([]);
   const [generalLedger, setGeneralLedger] = useState<any[]>([]);
-  const [incomeAccounts, setIncomeAccounts] = useState<any[]>([]);
+  const [incomeAccounts, setIncomeAccounts] = useState<any[]>([]);\n  const [balanceSheet, setBalanceSheet] = useState<any[]>([]);\n  const [cashFlow, setCashFlow] = useState<any[]>([]);\n  const [vatSummary, setVatSummary] = useState<any[]>([]);
   const [parties, setParties] = useState<any[]>([]);
   const [costCenters, setCostCenters] = useState<any[]>([]);
   const [centerCode, setCenterCode] = useState("");
@@ -80,7 +80,7 @@ export default function Dashboard() {
     if (!membership) { setCompanyId(null); setLoadingData(false); return; }
     const cid = membership.company_id as string;
     setCompanyId(cid);
-    const [companyResult, accountResult, periodResult, entryResult, balanceResult, ledgerResult, incomeResult, partyResult, centerResult] = await Promise.all([
+    const [companyResult, accountResult, periodResult, entryResult, balanceResult, ledgerResult, incomeResult, partyResult, centerResult, sheetResult, cashFlowResult, vatResult] = await Promise.all([
       supabase.from("companies").select("display_name,legal_name").eq("id", cid).single(),
       supabase.from("accounts").select("id,code,name_ar,type,is_posting,is_active").eq("company_id", cid).eq("is_active", true).order("code"),
       supabase.from("fiscal_periods").select("id,name,starts_on,ends_on,status").eq("company_id", cid).eq("status", "open").order("starts_on", { ascending: false }).limit(1).maybeSingle(),
@@ -89,7 +89,7 @@ export default function Dashboard() {
       supabase.from("general_ledger").select("*").eq("company_id", cid).order("entry_date", { ascending: false }).limit(500),
       supabase.from("income_statement_accounts").select("*").eq("company_id", cid).order("account_code"),
       supabase.from("parties").select("id,code,name,party_type,phone,tax_number,is_active").eq("company_id", cid).order("name"),
-      supabase.from("cost_centers").select("id,code,name_ar,is_active").eq("company_id", cid).order("code"),
+      supabase.from("cost_centers").select("id,code,name_ar,is_active").eq("company_id", cid).order("code"),\n      supabase.from("balance_sheet_accounts").select("*").eq("company_id", cid).order("account_code"),\n      supabase.from("cash_flow_summary").select("*").eq("company_id", cid).order("code"),\n      supabase.from("vat_summary").select("*").eq("company_id", cid).order("source_type"),
     ]);
     if (companyResult.data) setCompanyName(companyResult.data.display_name || companyResult.data.legal_name);
     if (accountResult.error) setNotice(accountResult.error.message); else setAccounts((accountResult.data ?? []) as Account[]);
@@ -99,7 +99,7 @@ export default function Dashboard() {
     if (ledgerResult.error) setNotice(ledgerResult.error.message); else setGeneralLedger(ledgerResult.data ?? []);
     if (incomeResult.error) setNotice(incomeResult.error.message); else setIncomeAccounts(incomeResult.data ?? []);
     if (partyResult.error) setNotice(partyResult.error.message); else setParties(partyResult.data ?? []);
-    if (centerResult.error) setNotice(centerResult.error.message); else setCostCenters(centerResult.data ?? []);
+    if (centerResult.error) setNotice(centerResult.error.message); else setCostCenters(centerResult.data ?? []);\n    if (sheetResult.error) setNotice(sheetResult.error.message); else setBalanceSheet(sheetResult.data ?? []);\n    if (cashFlowResult.error) setNotice(cashFlowResult.error.message); else setCashFlow(cashFlowResult.data ?? []);\n    if (vatResult.error) setNotice(vatResult.error.message); else setVatSummary(vatResult.data ?? []);
     setLoadingData(false);
   }, [supabase, user]);
 
@@ -281,7 +281,7 @@ export default function Dashboard() {
       <div className="brand"><span className="brand-mark">ش</span><div><b>الشموخ ERP</b><small>النظام المحاسبي</small></div></div>
       <div className="company-switch"><small>الشركة الحالية</small><strong>{companyName}</strong></div>
       <div className="nav-caption">القائمة الرئيسية</div>
-      <nav>{navItems.map((item, index) => <button key={item} className={active === item ? "nav-item active" : "nav-item"} onClick={() => setActive(item)}><span>{["▦", "⇄", "☷", "♙", "⌖", "▤", "⚖", "↗", "▣"][index]}</span>{item}</button>)}</nav>
+      <nav>{navItems.map((item, index) => <button key={item} className={active === item ? "nav-item active" : "nav-item"} onClick={() => setActive(item)}><span>{["▦", "⇄", "☷", "♙", "⌖", "▤", "⚖", "↗", "▣", "▤", "↕", "%"][index]}</span>{item}</button>)}</nav>
       <div className="sidebar-bottom"><span className="status-dot" /> متصل بقاعدة البيانات</div>
     </aside>
     <main className="main-area">
@@ -289,6 +289,9 @@ export default function Dashboard() {
       <div className="page-content">
         <section className="welcome-row"><div><div className="eyebrow">نظام الشموخ المحاسبي</div><h1>{active}</h1><p>إدارة دقيقة للحسابات والعمليات المالية من مكان واحد.</p></div>{active === "القيود اليومية" && <button className="primary-btn" onClick={() => setShowForm(true)}>＋ قيد يومي جديد</button>}</section>
         {notice && <p className="notice">{notice}</p>}\n        {active === "العمليات" && <Operations supabase={supabase!} companyId={companyId!} appUserId={appUserId} />}
+        {active === "الميزانية العمومية" && <section className="panel"><h2>الميزانية العمومية — أرصدة الحسابات</h2><div className="table-wrap"><table><thead><tr><th>الرمز</th><th>الحساب</th><th>التصنيف</th><th>الرصيد</th></tr></thead><tbody>{balanceSheet.map((r) => <tr key={r.account_id}><td>{r.account_code}</td><td>{r.account_name}</td><td>{r.account_type === "asset" ? "أصول" : r.account_type === "liability" ? "التزامات" : "حقوق ملكية"}</td><td>{formatSAR(Math.round(Number(r.balance) * 100))}</td></tr>)}</tbody></table></div></section>}
+        {active === "التدفقات النقدية" && <section className="panel"><h2>ملخص الصناديق والبنوك</h2><div className="table-wrap"><table><thead><tr><th>الحساب</th><th>النوع</th><th>الرصيد الافتتاحي</th><th>المقبوضات</th><th>المدفوعات</th><th>الرصيد الختامي</th></tr></thead><tbody>{cashFlow.map((r) => <tr key={r.cash_account_id}><td>{r.code} — {r.name_ar}</td><td>{r.account_type === "cash" ? "صندوق" : "بنك"}</td><td>{formatSAR(Math.round(Number(r.opening_balance) * 100))}</td><td>{formatSAR(Math.round(Number(r.receipts) * 100))}</td><td>{formatSAR(Math.round(Number(r.payments) * 100))}</td><td>{formatSAR(Math.round(Number(r.closing_balance) * 100))}</td></tr>)}</tbody></table></div><p className="notice">يعرض هذا الملخص حركات الصندوق والبنوك المرحلة فقط، وليس قائمة التدفقات النقدية المحاسبية الكاملة.</p></section>}
+        {active === "ملخص الضريبة" && <section className="panel"><h2>ملخص ضريبة القيمة المضافة</h2><div className="table-wrap"><table><thead><tr><th>المصدر</th><th>عدد الفواتير المرحلة</th><th>الإجمالي شامل الضريبة</th><th>الضريبة</th></tr></thead><tbody>{vatSummary.map((r,i) => <tr key={i}><td>{r.source_type === "sales" ? "المبيعات" : "المشتريات"}</td><td>{r.document_count}</td><td>{formatSAR(Math.round(Number(r.gross_amount) * 100))}</td><td>{formatSAR(Math.round(Number(r.vat_amount) * 100))}</td></tr>)}</tbody></table></div><p className="notice">هذا ملخص داخلي مبني على الفواتير المرحلة، ولا يمثل إقراراً ضريبياً أو اعتماداً من هيئة الزكاة والضريبة والجمارك.</p></section>}
         {loadingData && <p>جارٍ تحميل بيانات الشركة…</p>}
         {active === "لوحة التحكم" && <section className="content-grid">
           <article className="panel"><div className="panel-heading"><div><h2>آخر القيود اليومية</h2><p>القيود المسجلة في قاعدة البيانات</p></div><button className="text-btn" onClick={() => setActive("القيود اليومية")}>عرض الكل ←</button></div>
