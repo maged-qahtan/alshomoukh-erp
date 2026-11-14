@@ -32,7 +32,9 @@ export default function Dashboard() {
   const [periodId, setPeriodId] = useState<string | null>(null);
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [entries, setEntries] = useState<Entry[]>([]);
-  const [trialBalance, setTrialBalance] = useState<any[]>([]);\n  const [generalLedger, setGeneralLedger] = useState<any[]>([]);\n  const [incomeAccounts, setIncomeAccounts] = useState<any[]>([]);
+  const [trialBalance, setTrialBalance] = useState<any[]>([]);
+  const [generalLedger, setGeneralLedger] = useState<any[]>([]);
+  const [incomeAccounts, setIncomeAccounts] = useState<any[]>([]);
   const [active, setActive] = useState("لوحة التحكم");
   const [showForm, setShowForm] = useState(false);
   const [entryDate, setEntryDate] = useState(today);
@@ -82,7 +84,8 @@ export default function Dashboard() {
     if (periodResult.error) setNotice(periodResult.error.message); else setPeriodId(periodResult.data?.id ?? null);
     if (entryResult.error) setNotice(entryResult.error.message); else setEntries((entryResult.data ?? []) as Entry[]);
     if (balanceResult.error) setNotice(balanceResult.error.message); else setTrialBalance(balanceResult.data ?? []);
-    if (ledgerResult.error) setNotice(ledgerResult.error.message); else setGeneralLedger(ledgerResult.data ?? []);\n    if (incomeResult.error) setNotice(incomeResult.error.message); else setIncomeAccounts(incomeResult.data ?? []);
+    if (ledgerResult.error) setNotice(ledgerResult.error.message); else setGeneralLedger(ledgerResult.data ?? []);
+    if (incomeResult.error) setNotice(incomeResult.error.message); else setIncomeAccounts(incomeResult.data ?? []);
     setLoadingData(false);
   }, [supabase, user]);
 
