@@ -175,7 +175,7 @@ begin
   end if;
   return new;
 end;
-$;$
+$$;
 
 create trigger journal_entries_guard
 before update or delete on journal_entries
