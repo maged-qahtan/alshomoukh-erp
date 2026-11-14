@@ -9,7 +9,7 @@ type Account = { id: string; code: string; name_ar: string; type: string; is_pos
 type Line = { account_id: string; debit: string; credit: string; description: string };
 type Entry = { id: string; entry_number: number; entry_date: string; description: string; status: string };
 
-const navItems = ["لوحة التحكم", "القيود اليومية", "دليل الحسابات", "الأستاذ العام", "ميزان المراجعة"];
+const navItems = ["لوحة التحكم", "القيود اليومية", "دليل الحسابات", "الأستاذ العام", "ميزان المراجعة", "قائمة الدخل"];
 const today = new Date().toISOString().slice(0, 10);
 
 export default function Dashboard() {
@@ -32,7 +32,7 @@ export default function Dashboard() {
   const [periodId, setPeriodId] = useState<string | null>(null);
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [entries, setEntries] = useState<Entry[]>([]);
-  const [trialBalance, setTrialBalance] = useState<any[]>([]);
+  const [trialBalance, setTrialBalance] = useState<any[]>([]);\n  const [generalLedger, setGeneralLedger] = useState<any[]>([]);\n  const [incomeAccounts, setIncomeAccounts] = useState<any[]>([]);
   const [active, setActive] = useState("لوحة التحكم");
   const [showForm, setShowForm] = useState(false);
   const [entryDate, setEntryDate] = useState(today);
@@ -68,18 +68,18 @@ export default function Dashboard() {
     if (!membership) { setCompanyId(null); setLoadingData(false); return; }
     const cid = membership.company_id as string;
     setCompanyId(cid);
-    const [companyResult, accountResult, periodResult, entryResult, balanceResult] = await Promise.all([
+    const [companyResult, accountResult, periodResult, entryResult, balanceResult, ledgerResult, incomeResult] = await Promise.all([
       supabase.from("companies").select("display_name,legal_name").eq("id", cid).single(),
       supabase.from("accounts").select("id,code,name_ar,type,is_posting,is_active").eq("company_id", cid).eq("is_active", true).order("code"),
       supabase.from("fiscal_periods").select("id,name,starts_on,ends_on,status").eq("company_id", cid).eq("status", "open").order("starts_on", { ascending: false }).limit(1).maybeSingle(),
       supabase.from("journal_entries").select("id,entry_number,entry_date,description,status").eq("company_id", cid).order("entry_date", { ascending: false }).limit(30),
-      supabase.from("trial_balance").select("*").eq("company_id", cid).order("account_code"),
+      supabase.from("trial_balance").select("*").eq("company_id", cid).order("account_code"),\n      supabase.from("general_ledger").select("*").eq("company_id", cid).order("entry_date", { ascending: false }).limit(500),\n      supabase.from("income_statement_accounts").select("*").eq("company_id", cid).order("account_code"),
     ]);
     if (companyResult.data) setCompanyName(companyResult.data.display_name || companyResult.data.legal_name);
     if (accountResult.error) setNotice(accountResult.error.message); else setAccounts((accountResult.data ?? []) as Account[]);
     if (periodResult.error) setNotice(periodResult.error.message); else setPeriodId(periodResult.data?.id ?? null);
     if (entryResult.error) setNotice(entryResult.error.message); else setEntries((entryResult.data ?? []) as Entry[]);
-    if (balanceResult.error) setNotice(balanceResult.error.message); else setTrialBalance(balanceResult.data ?? []);
+    if (balanceResult.error) setNotice(balanceResult.error.message); else setTrialBalance(balanceResult.data ?? []);\n    if (ledgerResult.error) setNotice(ledgerResult.error.message); else setGeneralLedger(ledgerResult.data ?? []);\n    if (incomeResult.error) setNotice(incomeResult.error.message); else setIncomeAccounts(incomeResult.data ?? []);
     setLoadingData(false);
   }, [supabase, user]);
 
@@ -230,7 +230,7 @@ export default function Dashboard() {
       <div className="brand"><span className="brand-mark">ش</span><div><b>الشموخ ERP</b><small>النظام المحاسبي</small></div></div>
       <div className="company-switch"><small>الشركة الحالية</small><strong>{companyName}</strong></div>
       <div className="nav-caption">القائمة الرئيسية</div>
-      <nav>{navItems.map((item, index) => <button key={item} className={active === item ? "nav-item active" : "nav-item"} onClick={() => setActive(item)}><span>{["▦", "⇄", "☷", "▤", "⚖"][index]}</span>{item}</button>)}</nav>
+      <nav>{navItems.map((item, index) => <button key={item} className={active === item ? "nav-item active" : "nav-item"} onClick={() => setActive(item)}><span>{["▦", "⇄", "☷", "▤", "⚖", "↗"][index]}</span>{item}</button>)}</nav>
       <div className="sidebar-bottom"><span className="status-dot" /> متصل بقاعدة البيانات</div>
     </aside>
     <main className="main-area">
@@ -257,7 +257,8 @@ export default function Dashboard() {
         </section>}
         {active === "دليل الحسابات" && <section className="panel"><h2>دليل الحسابات</h2><div className="table-wrap"><table><thead><tr><th>الرمز</th><th>اسم الحساب</th><th>النوع</th><th>طبيعة الحساب</th></tr></thead><tbody>{accounts.map((a) => <tr key={a.id}><td>{a.code}</td><td>{a.name_ar}</td><td>{a.type}</td><td>{a.is_posting ? "حساب حركة" : "حساب تجميعي"}</td></tr>)}</tbody></table></div></section>}
         {active === "ميزان المراجعة" && <section className="panel"><h2>ميزان المراجعة</h2><div className="table-wrap"><table><thead><tr><th>الرمز</th><th>الحساب</th><th>مدين</th><th>دائن</th><th>رصيد مدين</th><th>رصيد دائن</th></tr></thead><tbody>{trialBalance.map((a) => <tr key={a.account_id}><td>{a.account_code}</td><td>{a.account_name}</td><td>{formatSAR(Math.round(Number(a.debit_total) * 100))}</td><td>{formatSAR(Math.round(Number(a.credit_total) * 100))}</td><td>{formatSAR(Math.round(Number(a.debit_balance) * 100))}</td><td>{formatSAR(Math.round(Number(a.credit_balance) * 100))}</td></tr>)}</tbody></table></div></section>}
-        {active === "الأستاذ العام" && <section className="panel"><h2>الأستاذ العام</h2><p>عرض الأستاذ العام التفصيلي قيد التجهيز؛ البيانات المحاسبية محفوظة ومحمية في قاعدة البيانات.</p></section>}
+        {active === "الأستاذ العام" && <section className="panel"><h2>الأستاذ العام</h2><div className="table-wrap"><table><thead><tr><th>التاريخ</th><th>رقم القيد</th><th>الحساب</th><th>البيان</th><th>مدين</th><th>دائن</th><th>الرصيد الجاري</th></tr></thead><tbody>{generalLedger.map((row, i) => <tr key={row.journal_entry_id + "-" + row.line_number + "-" + i}><td>{row.entry_date}</td><td>{row.entry_number}</td><td>{row.account_code} — {row.account_name}</td><td>{row.line_description || row.entry_description}</td><td>{formatSAR(Math.round(Number(row.debit) * 100))}</td><td>{formatSAR(Math.round(Number(row.credit) * 100))}</td><td>{formatSAR(Math.round(Number(row.running_balance) * 100))}</td></tr>)}</tbody></table></div></section>}
+        {active === "قائمة الدخل" && <section className="panel"><h2>قائمة الدخل حسب الحسابات</h2><div className="table-wrap"><table><thead><tr><th>الرمز</th><th>الحساب</th><th>النوع</th><th>قيمة الفترة</th></tr></thead><tbody>{incomeAccounts.map((row) => <tr key={row.account_id}><td>{row.account_code}</td><td>{row.account_name}</td><td>{row.account_type === "revenue" ? "إيراد" : "مصروف"}</td><td>{formatSAR(Math.round(Number(row.period_amount) * 100))}</td></tr>)}</tbody></table></div></section>}
         <footer className="page-footer"><span>© نظام الشموخ ERP</span><span>أساس الاستحقاق · القيد المزدوج · SAR</span></footer>
       </div>
     </main>
