@@ -110,7 +110,7 @@ export default function Dashboard() {
     if (cashFlowResult.error) setNotice(cashFlowResult.error.message); else setCashFlow(cashFlowResult.data ?? []);
     if (vatResult.error) setNotice(vatResult.error.message); else setVatSummary(vatResult.data ?? []);
     setLoadingData(false);
-  }, [supabase, user]);
+  }, [supabase, user, companyId]);
 
   useEffect(() => { void refreshWorkspace(); }, [refreshWorkspace]);
 
