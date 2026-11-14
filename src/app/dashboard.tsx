@@ -67,6 +67,12 @@ export default function Dashboard() {
   const [loadingData, setLoadingData] = useState(false);
   const [reportFrom, setReportFrom] = useState("");
   const [reportTo, setReportTo] = useState("");
+  const [journalSearch, setJournalSearch] = useState("");
+  const [journalStatus, setJournalStatus] = useState("all");
+  const [journalFrom, setJournalFrom] = useState("");
+  const [journalTo, setJournalTo] = useState("");
+  const [selectedEntry, setSelectedEntry] = useState<any | null>(null);
+  const [editingEntryId, setEditingEntryId] = useState<string | null>(null);
 
   useEffect(() => {
     if (!supabase) { setAuthLoading(false); return; }
