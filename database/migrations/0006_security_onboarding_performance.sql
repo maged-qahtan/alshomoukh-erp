@@ -58,23 +58,23 @@ create policy "members insert lines of draft entries" on public.journal_lines
 for insert to authenticated with check (
   public.can_access_company(company_id)
   and exists (select 1 from public.journal_entries e
-    where e.id = journal_entry_id and e.company_id = company_id and e.status = 'draft')
+    where e.id = public.journal_lines.journal_entry_id and e.company_id = public.journal_lines.company_id and e.status = 'draft')
 );
 create policy "members update lines of draft entries" on public.journal_lines
 for update to authenticated using (
   public.can_access_company(company_id)
   and exists (select 1 from public.journal_entries e
-    where e.id = journal_entry_id and e.company_id = company_id and e.status = 'draft')
+    where e.id = public.journal_lines.journal_entry_id and e.company_id = public.journal_lines.company_id and e.status = 'draft')
 ) with check (
   public.can_access_company(company_id)
   and exists (select 1 from public.journal_entries e
-    where e.id = journal_entry_id and e.company_id = company_id and e.status = 'draft')
+    where e.id = public.journal_lines.journal_entry_id and e.company_id = public.journal_lines.company_id and e.status = 'draft')
 );
 create policy "members delete lines of draft entries" on public.journal_lines
 for delete to authenticated using (
   public.can_access_company(company_id)
   and exists (select 1 from public.journal_entries e
-    where e.id = journal_entry_id and e.company_id = company_id and e.status = 'draft')
+    where e.id = public.journal_lines.journal_entry_id and e.company_id = public.journal_lines.company_id and e.status = 'draft')
 );
 
 -- Cover foreign keys used in joins, deletes, and account hierarchy lookups.
