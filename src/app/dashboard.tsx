@@ -34,7 +34,13 @@ export default function Dashboard() {
   const [entries, setEntries] = useState<Entry[]>([]);
   const [trialBalance, setTrialBalance] = useState<any[]>([]);
   const [generalLedger, setGeneralLedger] = useState<any[]>([]);
-  const [incomeAccounts, setIncomeAccounts] = useState<any[]>([]);\n  const [parties, setParties] = useState<any[]>([]);\n  const [partyCode, setPartyCode] = useState("");\n  const [partyName, setPartyName] = useState("");\n  const [partyType, setPartyType] = useState("customer");\n  const [partyPhone, setPartyPhone] = useState("");\n  const [partyTax, setPartyTax] = useState("");
+  const [incomeAccounts, setIncomeAccounts] = useState<any[]>([]);
+  const [parties, setParties] = useState<any[]>([]);
+  const [partyCode, setPartyCode] = useState("");
+  const [partyName, setPartyName] = useState("");
+  const [partyType, setPartyType] = useState("customer");
+  const [partyPhone, setPartyPhone] = useState("");
+  const [partyTax, setPartyTax] = useState("");
   const [active, setActive] = useState("لوحة التحكم");
   const [showForm, setShowForm] = useState(false);
   const [entryDate, setEntryDate] = useState(today);
@@ -77,7 +83,8 @@ export default function Dashboard() {
       supabase.from("journal_entries").select("id,entry_number,entry_date,description,status").eq("company_id", cid).order("entry_date", { ascending: false }).limit(30),
       supabase.from("trial_balance").select("*").eq("company_id", cid).order("account_code"),
       supabase.from("general_ledger").select("*").eq("company_id", cid).order("entry_date", { ascending: false }).limit(500),
-      supabase.from("income_statement_accounts").select("*").eq("company_id", cid).order("account_code"),\n      supabase.from("parties").select("id,code,name,party_type,phone,tax_number,is_active").eq("company_id", cid).order("name"),
+      supabase.from("income_statement_accounts").select("*").eq("company_id", cid).order("account_code"),
+      supabase.from("parties").select("id,code,name,party_type,phone,tax_number,is_active").eq("company_id", cid).order("name"),
     ]);
     if (companyResult.data) setCompanyName(companyResult.data.display_name || companyResult.data.legal_name);
     if (accountResult.error) setNotice(accountResult.error.message); else setAccounts((accountResult.data ?? []) as Account[]);
@@ -85,7 +92,8 @@ export default function Dashboard() {
     if (entryResult.error) setNotice(entryResult.error.message); else setEntries((entryResult.data ?? []) as Entry[]);
     if (balanceResult.error) setNotice(balanceResult.error.message); else setTrialBalance(balanceResult.data ?? []);
     if (ledgerResult.error) setNotice(ledgerResult.error.message); else setGeneralLedger(ledgerResult.data ?? []);
-    if (incomeResult.error) setNotice(incomeResult.error.message); else setIncomeAccounts(incomeResult.data ?? []);\n    if (partyResult.error) setNotice(partyResult.error.message); else setParties(partyResult.data ?? []);
+    if (incomeResult.error) setNotice(incomeResult.error.message); else setIncomeAccounts(incomeResult.data ?? []);
+    if (partyResult.error) setNotice(partyResult.error.message); else setParties(partyResult.data ?? []);
     setLoadingData(false);
   }, [supabase, user]);
 
