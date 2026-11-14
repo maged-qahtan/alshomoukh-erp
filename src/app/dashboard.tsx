@@ -12,6 +12,16 @@ type Entry = { id: string; entry_number: number; entry_date: string; description
 
 const navItems = ["لوحة التحكم", "القيود اليومية", "دليل الحسابات", "العملاء والموردون", "مراكز التكلفة", "الأستاذ العام", "ميزان المراجعة", "قائمة الدخل", "العمليات", "الميزانية العمومية", "التدفقات النقدية", "ملخص الضريبة"];
 const today = new Date().toISOString().slice(0, 10);
+const csvCell = (value: unknown) => '"' + String(value ?? "").replaceAll('"', '""') + '"';
+function downloadCsv(filename: string, rows: unknown[][]) {
+  const csv = "\\uFEFF" + rows.map((row) => row.map(csvCell).join(",")).join("\\r\\n");
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url; link.download = filename; link.click();
+  URL.revokeObjectURL(url);
+}
+
 
 export default function Dashboard() {
   const configured = Boolean(process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY);
@@ -54,7 +64,7 @@ export default function Dashboard() {
   const [entryDate, setEntryDate] = useState(today);
   const [description, setDescription] = useState("");
   const [lines, setLines] = useState<Line[]>([]);
-  const [loadingData, setLoadingData] = useState(false);
+  const [loadingData, setLoadingData] = useState(false);\n  const [reportFrom, setReportFrom] = useState("");\n  const [reportTo, setReportTo] = useState("");
 
   useEffect(() => {
     if (!supabase) { setAuthLoading(false); return; }
@@ -137,7 +147,7 @@ export default function Dashboard() {
     debit: sum.debit + Math.round((Number(line.debit) || 0) * 100),
     credit: sum.credit + Math.round((Number(line.credit) || 0) * 100),
   }), { debit: 0, credit: 0 }), [lines]);
-  const balanced = totals.debit > 0 && totals.debit === totals.credit;
+  const balanced = totals.debit > 0 && totals.debit === totals.credit;\n  const filteredLedger = generalLedger.filter((row:any) => (!reportFrom || row.entry_date >= reportFrom) && (!reportTo || row.entry_date <= reportTo));
 
   async function handleAuth(event: FormEvent) {
     event.preventDefault();
@@ -330,7 +340,7 @@ export default function Dashboard() {
         {active === "ميزان المراجعة" && <section className="panel"><h2>ميزان المراجعة</h2><div className="table-wrap"><table><thead><tr><th>الرمز</th><th>الحساب</th><th>مدين</th><th>دائن</th><th>رصيد مدين</th><th>رصيد دائن</th></tr></thead><tbody>{trialBalance.map((a) => <tr key={a.account_id}><td>{a.account_code}</td><td>{a.account_name}</td><td>{formatSAR(Math.round(Number(a.debit_total) * 100))}</td><td>{formatSAR(Math.round(Number(a.credit_total) * 100))}</td><td>{formatSAR(Math.round(Number(a.debit_balance) * 100))}</td><td>{formatSAR(Math.round(Number(a.credit_balance) * 100))}</td></tr>)}</tbody></table></div></section>}
         {active === "مراكز التكلفة" && <section className="panel"><h2>مراكز التكلفة</h2><form className="journal-form" onSubmit={addCostCenter}><div className="form-fields"><label>الرمز<input required value={centerCode} onChange={(e) => setCenterCode(e.target.value)} placeholder="CC-001" /></label><label className="description-field">اسم مركز التكلفة<input required value={centerName} onChange={(e) => setCenterName(e.target.value)} placeholder="اسم الفرع أو القسم" /></label><button className="primary-btn" disabled={busy}>إضافة المركز</button></div></form><div className="table-wrap"><table><thead><tr><th>الرمز</th><th>اسم مركز التكلفة</th><th>الحالة</th></tr></thead><tbody>{costCenters.map((cc) => <tr key={cc.id}><td>{cc.code}</td><td>{cc.name_ar}</td><td>{cc.is_active ? "نشط" : "موقوف"}</td></tr>)}</tbody></table></div></section>}
         {active === "العملاء والموردون" && <section className="panel"><div className="panel-heading"><div><h2>سجل العملاء والموردين</h2><p>إدارة بيانات الأطراف وربطها بالقيود المحاسبية</p></div></div><form className="journal-form" onSubmit={addParty}><div className="form-fields"><label>نوع الطرف<select value={partyType} onChange={(e) => setPartyType(e.target.value)}><option value="customer">عميل</option><option value="supplier">مورد</option><option value="both">عميل ومورد</option></select></label><label>الرمز<input required value={partyCode} onChange={(e) => setPartyCode(e.target.value)} placeholder="C-001" /></label><label className="description-field">الاسم<input required value={partyName} onChange={(e) => setPartyName(e.target.value)} placeholder="اسم العميل أو المورد" /></label></div><div className="form-fields"><label>الهاتف<input value={partyPhone} onChange={(e) => setPartyPhone(e.target.value)} /></label><label>الرقم الضريبي<input value={partyTax} onChange={(e) => setPartyTax(e.target.value)} /></label><button className="primary-btn" disabled={busy}>حفظ الطرف</button></div></form><div className="table-wrap"><table><thead><tr><th>الرمز</th><th>الاسم</th><th>النوع</th><th>الهاتف</th><th>الرقم الضريبي</th></tr></thead><tbody>{parties.map((p) => <tr key={p.id}><td>{p.code}</td><td>{p.name}</td><td>{p.party_type === "customer" ? "عميل" : p.party_type === "supplier" ? "مورد" : "عميل ومورد"}</td><td>{p.phone || "—"}</td><td>{p.tax_number || "—"}</td></tr>)}</tbody></table></div></section>}
-        {active === "الأستاذ العام" && <section className="panel"><h2>الأستاذ العام</h2><div className="table-wrap"><table><thead><tr><th>التاريخ</th><th>رقم القيد</th><th>الحساب</th><th>البيان</th><th>مدين</th><th>دائن</th><th>الرصيد الجاري</th></tr></thead><tbody>{generalLedger.map((row, i) => <tr key={row.journal_entry_id + "-" + row.line_number + "-" + i}><td>{row.entry_date}</td><td>{row.entry_number}</td><td>{row.account_code} — {row.account_name}</td><td>{row.line_description || row.entry_description}</td><td>{formatSAR(Math.round(Number(row.debit) * 100))}</td><td>{formatSAR(Math.round(Number(row.credit) * 100))}</td><td>{formatSAR(Math.round(Number(row.running_balance) * 100))}</td></tr>)}</tbody></table></div></section>}
+        {active === "الأستاذ العام" && <section className="panel"><div className="panel-heading"><div><h2>الأستاذ العام</h2><p>حركات القيود المرحلة — آخر 500 حركة محملة</p></div><div className="report-actions"><button className="secondary-btn" onClick={() => downloadCsv("general-ledger.csv", [["التاريخ","رقم القيد","رمز الحساب","اسم الحساب","البيان","مدين","دائن","الرصيد الجاري"], ...filteredLedger.map((r:any)=>[r.entry_date,r.entry_number,r.account_code,r.account_name,r.line_description||r.entry_description,r.debit,r.credit,r.running_balance])])}>تصدير CSV لبرنامج Excel</button><button className="secondary-btn" onClick={() => window.print()}>طباعة</button></div></div><div className="report-filters"><label>من تاريخ<input type="date" value={reportFrom} onChange={(e)=>setReportFrom(e.target.value)}/></label><label>إلى تاريخ<input type="date" value={reportTo} onChange={(e)=>setReportTo(e.target.value)}/></label><button className="text-btn" onClick={()=>{setReportFrom("");setReportTo("");}}>مسح التصفية</button></div><div className="table-wrap"><table><thead><tr><th>التاريخ</th><th>رقم القيد</th><th>الحساب</th><th>البيان</th><th>مدين</th><th>دائن</th><th>الرصيد الجاري</th></tr></thead><tbody>{filteredLedger.map((row:any, i:number) => <tr key={row.journal_entry_id + "-" + row.line_number + "-" + i}><td>{row.entry_date}</td><td>{row.entry_number}</td><td>{row.account_code} — {row.account_name}</td><td>{row.line_description || row.entry_description}</td><td>{formatSAR(Math.round(Number(row.debit) * 100))}</td><td>{formatSAR(Math.round(Number(row.credit) * 100))}</td><td>{formatSAR(Math.round(Number(row.running_balance) * 100))}</td></tr>)}</tbody></table></div><p className="report-footnote">عدد الحركات المعروضة: {filteredLedger.length}</p></section>}
         {active === "قائمة الدخل" && <section className="panel"><h2>قائمة الدخل حسب الحسابات</h2><div className="table-wrap"><table><thead><tr><th>الرمز</th><th>الحساب</th><th>النوع</th><th>قيمة الفترة</th></tr></thead><tbody>{incomeAccounts.map((row) => <tr key={row.account_id}><td>{row.account_code}</td><td>{row.account_name}</td><td>{row.account_type === "revenue" ? "إيراد" : "مصروف"}</td><td>{formatSAR(Math.round(Number(row.period_amount) * 100))}</td></tr>)}</tbody></table></div></section>}
         <footer className="page-footer"><span>© نظام الشموخ ERP</span><span>أساس الاستحقاق · القيد المزدوج · SAR</span></footer>
       </div>
