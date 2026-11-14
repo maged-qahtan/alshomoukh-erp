@@ -147,7 +147,8 @@ export default function Dashboard() {
     debit: sum.debit + Math.round((Number(line.debit) || 0) * 100),
     credit: sum.credit + Math.round((Number(line.credit) || 0) * 100),
   }), { debit: 0, credit: 0 }), [lines]);
-  const balanced = totals.debit > 0 && totals.debit === totals.credit;\n  const filteredLedger = generalLedger.filter((row:any) => (!reportFrom || row.entry_date >= reportFrom) && (!reportTo || row.entry_date <= reportTo));
+  const balanced = totals.debit > 0 && totals.debit === totals.credit;
+  const filteredLedger = generalLedger.filter((row:any) => (!reportFrom || row.entry_date >= reportFrom) && (!reportTo || row.entry_date <= reportTo));
 
   async function handleAuth(event: FormEvent) {
     event.preventDefault();
