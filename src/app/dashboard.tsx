@@ -35,7 +35,10 @@ export default function Dashboard() {
   const [entries, setEntries] = useState<Entry[]>([]);
   const [trialBalance, setTrialBalance] = useState<any[]>([]);
   const [generalLedger, setGeneralLedger] = useState<any[]>([]);
-  const [incomeAccounts, setIncomeAccounts] = useState<any[]>([]);\n  const [balanceSheet, setBalanceSheet] = useState<any[]>([]);\n  const [cashFlow, setCashFlow] = useState<any[]>([]);\n  const [vatSummary, setVatSummary] = useState<any[]>([]);
+  const [incomeAccounts, setIncomeAccounts] = useState<any[]>([]);
+  const [balanceSheet, setBalanceSheet] = useState<any[]>([]);
+  const [cashFlow, setCashFlow] = useState<any[]>([]);
+  const [vatSummary, setVatSummary] = useState<any[]>([]);
   const [parties, setParties] = useState<any[]>([]);
   const [costCenters, setCostCenters] = useState<any[]>([]);
   const [centerCode, setCenterCode] = useState("");
@@ -89,7 +92,10 @@ export default function Dashboard() {
       supabase.from("general_ledger").select("*").eq("company_id", cid).order("entry_date", { ascending: false }).limit(500),
       supabase.from("income_statement_accounts").select("*").eq("company_id", cid).order("account_code"),
       supabase.from("parties").select("id,code,name,party_type,phone,tax_number,is_active").eq("company_id", cid).order("name"),
-      supabase.from("cost_centers").select("id,code,name_ar,is_active").eq("company_id", cid).order("code"),\n      supabase.from("balance_sheet_accounts").select("*").eq("company_id", cid).order("account_code"),\n      supabase.from("cash_flow_summary").select("*").eq("company_id", cid).order("code"),\n      supabase.from("vat_summary").select("*").eq("company_id", cid).order("source_type"),
+      supabase.from("cost_centers").select("id,code,name_ar,is_active").eq("company_id", cid).order("code"),
+      supabase.from("balance_sheet_accounts").select("*").eq("company_id", cid).order("account_code"),
+      supabase.from("cash_flow_summary").select("*").eq("company_id", cid).order("code"),
+      supabase.from("vat_summary").select("*").eq("company_id", cid).order("source_type"),
     ]);
     if (companyResult.data) setCompanyName(companyResult.data.display_name || companyResult.data.legal_name);
     if (accountResult.error) setNotice(accountResult.error.message); else setAccounts((accountResult.data ?? []) as Account[]);
@@ -99,7 +105,10 @@ export default function Dashboard() {
     if (ledgerResult.error) setNotice(ledgerResult.error.message); else setGeneralLedger(ledgerResult.data ?? []);
     if (incomeResult.error) setNotice(incomeResult.error.message); else setIncomeAccounts(incomeResult.data ?? []);
     if (partyResult.error) setNotice(partyResult.error.message); else setParties(partyResult.data ?? []);
-    if (centerResult.error) setNotice(centerResult.error.message); else setCostCenters(centerResult.data ?? []);\n    if (sheetResult.error) setNotice(sheetResult.error.message); else setBalanceSheet(sheetResult.data ?? []);\n    if (cashFlowResult.error) setNotice(cashFlowResult.error.message); else setCashFlow(cashFlowResult.data ?? []);\n    if (vatResult.error) setNotice(vatResult.error.message); else setVatSummary(vatResult.data ?? []);
+    if (centerResult.error) setNotice(centerResult.error.message); else setCostCenters(centerResult.data ?? []);
+    if (sheetResult.error) setNotice(sheetResult.error.message); else setBalanceSheet(sheetResult.data ?? []);
+    if (cashFlowResult.error) setNotice(cashFlowResult.error.message); else setCashFlow(cashFlowResult.data ?? []);
+    if (vatResult.error) setNotice(vatResult.error.message); else setVatSummary(vatResult.data ?? []);
     setLoadingData(false);
   }, [supabase, user]);
 
@@ -288,7 +297,8 @@ export default function Dashboard() {
       <header className="topbar"><div><span className="breadcrumb">الرئيسية</span><span className="crumb-sep">/</span><b>{active}</b></div><div className="top-actions"><span className="currency-pill">SAR · ريال سعودي</span><button className="text-btn" onClick={signOut}>خروج</button></div></header>
       <div className="page-content">
         <section className="welcome-row"><div><div className="eyebrow">نظام الشموخ المحاسبي</div><h1>{active}</h1><p>إدارة دقيقة للحسابات والعمليات المالية من مكان واحد.</p></div>{active === "القيود اليومية" && <button className="primary-btn" onClick={() => setShowForm(true)}>＋ قيد يومي جديد</button>}</section>
-        {notice && <p className="notice">{notice}</p>}\n        {active === "العمليات" && <Operations supabase={supabase!} companyId={companyId!} appUserId={appUserId} />}
+        {notice && <p className="notice">{notice}</p>}
+        {active === "العمليات" && <Operations supabase={supabase!} companyId={companyId!} appUserId={appUserId} />}
         {active === "الميزانية العمومية" && <section className="panel"><h2>الميزانية العمومية — أرصدة الحسابات</h2><div className="table-wrap"><table><thead><tr><th>الرمز</th><th>الحساب</th><th>التصنيف</th><th>الرصيد</th></tr></thead><tbody>{balanceSheet.map((r) => <tr key={r.account_id}><td>{r.account_code}</td><td>{r.account_name}</td><td>{r.account_type === "asset" ? "أصول" : r.account_type === "liability" ? "التزامات" : "حقوق ملكية"}</td><td>{formatSAR(Math.round(Number(r.balance) * 100))}</td></tr>)}</tbody></table></div></section>}
         {active === "التدفقات النقدية" && <section className="panel"><h2>ملخص الصناديق والبنوك</h2><div className="table-wrap"><table><thead><tr><th>الحساب</th><th>النوع</th><th>الرصيد الافتتاحي</th><th>المقبوضات</th><th>المدفوعات</th><th>الرصيد الختامي</th></tr></thead><tbody>{cashFlow.map((r) => <tr key={r.cash_account_id}><td>{r.code} — {r.name_ar}</td><td>{r.account_type === "cash" ? "صندوق" : "بنك"}</td><td>{formatSAR(Math.round(Number(r.opening_balance) * 100))}</td><td>{formatSAR(Math.round(Number(r.receipts) * 100))}</td><td>{formatSAR(Math.round(Number(r.payments) * 100))}</td><td>{formatSAR(Math.round(Number(r.closing_balance) * 100))}</td></tr>)}</tbody></table></div><p className="notice">يعرض هذا الملخص حركات الصندوق والبنوك المرحلة فقط، وليس قائمة التدفقات النقدية المحاسبية الكاملة.</p></section>}
         {active === "ملخص الضريبة" && <section className="panel"><h2>ملخص ضريبة القيمة المضافة</h2><div className="table-wrap"><table><thead><tr><th>المصدر</th><th>عدد الفواتير المرحلة</th><th>الإجمالي شامل الضريبة</th><th>الضريبة</th></tr></thead><tbody>{vatSummary.map((r,i) => <tr key={i}><td>{r.source_type === "sales" ? "المبيعات" : "المشتريات"}</td><td>{r.document_count}</td><td>{formatSAR(Math.round(Number(r.gross_amount) * 100))}</td><td>{formatSAR(Math.round(Number(r.vat_amount) * 100))}</td></tr>)}</tbody></table></div><p className="notice">هذا ملخص داخلي مبني على الفواتير المرحلة، ولا يمثل إقراراً ضريبياً أو اعتماداً من هيئة الزكاة والضريبة والجمارك.</p></section>}
