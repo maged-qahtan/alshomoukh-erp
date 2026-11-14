@@ -17,7 +17,7 @@ create or replace function current_app_user_id()
 returns uuid
 language sql stable security definer
 set search_path = pg_catalog
-as $
+as $$
   select id from public.app_users
   where auth_subject = auth.uid()::text and is_active = true
   limit 1
@@ -27,7 +27,7 @@ create or replace function can_access_company(target_company_id uuid)
 returns boolean
 language sql stable security definer
 set search_path = pg_catalog
-as $
+as $$
   select exists (
     select 1 from public.company_users cu
     where cu.company_id = target_company_id
