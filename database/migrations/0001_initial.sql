@@ -50,6 +50,7 @@ create table fiscal_periods (
   closed_by uuid references app_users(id),
   check (ends_on >= starts_on),
   unique (company_id, name),
+  unique (company_id, id),
   unique (company_id, starts_on, ends_on)
 );
 
@@ -77,7 +78,8 @@ create table cost_centers (
   name_ar text not null,
   name_en text not null,
   is_active boolean not null default true,
-  unique (company_id, code)
+  unique (company_id, code),
+  unique (company_id, id)
 );
 
 create table parties (
@@ -90,13 +92,14 @@ create table parties (
   phone text,
   email text,
   is_active boolean not null default true,
-  unique (company_id, code)
+  unique (company_id, code),
+  unique (company_id, id)
 );
 
 create table journal_entries (
   id uuid primary key default gen_random_uuid(),
   company_id uuid not null references companies(id),
-  fiscal_period_id uuid not null references fiscal_periods(id),
+  fiscal_period_id uuid not null,
   entry_number bigint generated always as identity,
   entry_date date not null,
   description text not null,
@@ -111,7 +114,8 @@ create table journal_entries (
   posted_at timestamptz,
   reversed_entry_id uuid references journal_entries(id),
   unique (company_id, entry_number),
-  unique (company_id, id)
+  unique (company_id, id),
+  foreign key (company_id, fiscal_period_id) references fiscal_periods(company_id, id)
 );
 
 create table journal_lines (
@@ -121,12 +125,13 @@ create table journal_lines (
   line_number integer not null check (line_number > 0),
   account_id uuid not null,
   description text,
-  party_id uuid references parties(id),
-  cost_center_id uuid references cost_centers(id),
+  party_id uuid,
+  cost_center_id uuid,
   debit numeric(20, 2) not null default 0 check (debit >= 0),
   credit numeric(20, 2) not null default 0 check (credit >= 0),
   foreign key (company_id, journal_entry_id) references journal_entries(company_id, id),
   foreign key (company_id, account_id) references accounts(company_id, id),
+  foreign key (company_id, party_id) references parties(company_id, id),
   foreign key (company_id, cost_center_id) references cost_centers(company_id, id),
   unique (journal_entry_id, line_number),
   check ((debit > 0 and credit = 0) or (credit > 0 and debit = 0))
@@ -147,6 +152,34 @@ create table audit_logs (
   after_data jsonb,
   created_at timestamptz not null default now()
 );
+
+
+-- Only the posting procedure may move a draft entry to posted.
+create or replace function guard_journal_entry_mutation()
+returns trigger language plpgsql as $
+begin
+  if tg_op = 'DELETE' then
+    if old.status in ('posted', 'reversed') then
+      raise exception 'Posted journal entries cannot be deleted.';
+    end if;
+    return old;
+  end if;
+
+  if old.status in ('posted', 'reversed') then
+    raise exception 'Posted journal entries are immutable.';
+  end if;
+
+  if old.status = 'draft' and new.status = 'posted'
+     and current_setting('app.posting_entry_id', true) is distinct from old.id::text then
+    raise exception 'Use post_journal_entry() to post an entry.';
+  end if;
+  return new;
+end;
+$;
+
+create trigger journal_entries_guard
+before update or delete on journal_entries
+for each row execute function guard_journal_entry_mutation();
 
 -- Posted journal entries are immutable. Corrections must use reversal/adjustment entries.
 create or replace function prevent_posted_journal_mutation()
@@ -204,9 +237,11 @@ begin
      where l.journal_entry_id = p_entry_id and (not a.is_active or not a.is_posting)
   ) then raise exception 'An account is inactive or is a non-posting parent account.'; end if;
 
+  perform set_config('app.posting_entry_id', p_entry_id::text, true);
   update journal_entries
      set status = 'posted', posted_by = p_user_id, posted_at = now()
    where id = p_entry_id;
+  perform set_config('app.posting_entry_id', '', true);
 
   insert into audit_logs(company_id, actor_user_id, action, entity_type, entity_id, after_data)
   values (entry_row.company_id, p_user_id, 'journal.posted', 'journal_entry', p_entry_id,

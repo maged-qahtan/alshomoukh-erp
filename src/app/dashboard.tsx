@@ -56,7 +56,7 @@ export default function Dashboard() {
               <button className="add-line" onClick={() => setLines((current) => [...current,{accountId:"1110",debit:"0",credit:"0",description:""}])}>＋ إضافة سطر</button>
               <div className="totals-row"><div><small>إجمالي المدين</small><b>{formatSAR(totals.debit)}</b></div><div><small>إجمالي الدائن</small><b>{formatSAR(totals.credit)}</b></div><div className={balanced ? "balance-ok" : "balance-warn"}><small>حالة التوازن</small><b>{balanced ? "متوازن ✓" : "غير متوازن"}</b></div></div>
               <div className="form-note">هذه شاشة نموذجية محلية؛ الحفظ والترحيل غير مفعلين قبل ربط قاعدة البيانات والمستخدمين.</div>
-              <div className="form-actions"><button className="secondary-btn" onClick={() => { setLines([{accountId:"1110",debit:"0",credit:"0",description:""},{accountId:"4100",debit:"0",credit:"0",description:""}]); setDescription(""); }}>مسح النموذج</button><button className="primary-btn" disabled={!balanced || !description.trim() || !date}>حفظ المسودة (غير متاح حالياً)</button></div>
+              <div className="form-actions"><button className="secondary-btn" onClick={() => { setLines([{accountId:"1110",debit:"0",credit:"0",description:""},{accountId:"4100",debit:"0",credit:"0",description:""}]); setDescription(""); }}>مسح النموذج</button><button className="primary-btn" disabled>الحفظ بعد ربط قاعدة البيانات</button></div>
             </div>}
             {!showForm && <div className="empty-state"><span>⇄</span><b>دفتر القيود جاهز للربط</b><p>تم تجهيز نموذج القيد والتحقق الأولي من تساوي المدين والدائن.</p></div>}
           </section>}
