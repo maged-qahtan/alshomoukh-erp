@@ -26,6 +26,7 @@ export default function Dashboard() {
   const [busy, setBusy] = useState(false);
   const [appUserId, setAppUserId] = useState<string | null>(null);
   const [companyId, setCompanyId] = useState<string | null>(null);
+  const [companies, setCompanies] = useState<Array<{id:string;display_name:string;legal_name:string}>>([]);
   const [companyName, setCompanyName] = useState("الشركة");
   const [companyLegalName, setCompanyLegalName] = useState("");
   const [fiscalStart, setFiscalStart] = useState(`${new Date().getFullYear()}-01-01`);
@@ -77,11 +78,17 @@ export default function Dashboard() {
     if (appError) { setNotice(appError.message); setLoadingData(false); return; }
     if (!appId) { setAppUserId(null); setCompanyId(null); setLoadingData(false); return; }
     setAppUserId(appId);
-    const { data: membership, error: membershipError } = await supabase
-      .from("company_users").select("company_id").eq("user_id", appId).eq("is_active", true).limit(1).maybeSingle();
+    const { data: memberships, error: membershipError } = await supabase
+      .from("company_users").select("company_id").eq("user_id", appId).eq("is_active", true);
     if (membershipError) { setNotice(membershipError.message); setLoadingData(false); return; }
-    if (!membership) { setCompanyId(null); setLoadingData(false); return; }
-    const cid = membership.company_id as string;
+    const companyIds = (memberships ?? []).map((m: any) => m.company_id as string);
+    if (!companyIds.length) { setCompanies([]); setCompanyId(null); setLoadingData(false); return; }
+    const { data: availableCompanies, error: companiesError } = await supabase
+      .from("companies").select("id,display_name,legal_name").in("id", companyIds).order("display_name");
+    if (companiesError) { setNotice(companiesError.message); setLoadingData(false); return; }
+    const companyList = (availableCompanies ?? []) as Array<{id:string;display_name:string;legal_name:string}>;
+    setCompanies(companyList);
+    const cid = companyList.some((company) => company.id === companyId) ? companyId! : companyList[0].id;
     setCompanyId(cid);
     const [companyResult, accountResult, periodResult, entryResult, balanceResult, ledgerResult, incomeResult, partyResult, centerResult, sheetResult, cashFlowResult, vatResult] = await Promise.all([
       supabase.from("companies").select("display_name,legal_name").eq("id", cid).single(),
@@ -288,7 +295,7 @@ export default function Dashboard() {
   return <div className="app-shell">
     <aside className="sidebar">
       <div className="brand"><span className="brand-mark">ش</span><div><b>الشموخ ERP</b><small>النظام المحاسبي</small></div></div>
-      <div className="company-switch"><small>الشركة الحالية</small><strong>{companyName}</strong></div>
+      <div className="company-switch"><small>الشركة الحالية</small>{companies.length > 1 ? <select aria-label="اختيار الشركة" value={companyId ?? ""} onChange={(e) => { setCompanyId(e.target.value); setActive("لوحة التحكم"); setNotice(""); setLines([]); setShowForm(false); }}><option value="" disabled>اختر الشركة</option>{companies.map((company) => <option key={company.id} value={company.id}>{company.display_name || company.legal_name}</option>)}</select> : <strong>{companyName}</strong>}</div>
       <div className="nav-caption">القائمة الرئيسية</div>
       <nav>{navItems.map((item, index) => <button key={item} className={active === item ? "nav-item active" : "nav-item"} onClick={() => setActive(item)}><span>{["▦", "⇄", "☷", "♙", "⌖", "▤", "⚖", "↗", "▣", "▤", "↕", "%"][index]}</span>{item}</button>)}</nav>
       <div className="sidebar-bottom"><span className="status-dot" /> متصل بقاعدة البيانات</div>
