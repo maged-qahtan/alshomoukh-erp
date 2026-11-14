@@ -9,7 +9,7 @@ type Account = { id: string; code: string; name_ar: string; type: string; is_pos
 type Line = { account_id: string; debit: string; credit: string; description: string };
 type Entry = { id: string; entry_number: number; entry_date: string; description: string; status: string };
 
-const navItems = ["لوحة التحكم", "القيود اليومية", "دليل الحسابات", "الأستاذ العام", "ميزان المراجعة", "قائمة الدخل"];
+const navItems = ["لوحة التحكم", "القيود اليومية", "دليل الحسابات", "العملاء والموردون", "الأستاذ العام", "ميزان المراجعة", "قائمة الدخل"];
 const today = new Date().toISOString().slice(0, 10);
 
 export default function Dashboard() {
@@ -34,7 +34,7 @@ export default function Dashboard() {
   const [entries, setEntries] = useState<Entry[]>([]);
   const [trialBalance, setTrialBalance] = useState<any[]>([]);
   const [generalLedger, setGeneralLedger] = useState<any[]>([]);
-  const [incomeAccounts, setIncomeAccounts] = useState<any[]>([]);
+  const [incomeAccounts, setIncomeAccounts] = useState<any[]>([]);\n  const [parties, setParties] = useState<any[]>([]);\n  const [partyCode, setPartyCode] = useState("");\n  const [partyName, setPartyName] = useState("");\n  const [partyType, setPartyType] = useState("customer");\n  const [partyPhone, setPartyPhone] = useState("");\n  const [partyTax, setPartyTax] = useState("");
   const [active, setActive] = useState("لوحة التحكم");
   const [showForm, setShowForm] = useState(false);
   const [entryDate, setEntryDate] = useState(today);
@@ -70,14 +70,14 @@ export default function Dashboard() {
     if (!membership) { setCompanyId(null); setLoadingData(false); return; }
     const cid = membership.company_id as string;
     setCompanyId(cid);
-    const [companyResult, accountResult, periodResult, entryResult, balanceResult, ledgerResult, incomeResult] = await Promise.all([
+    const [companyResult, accountResult, periodResult, entryResult, balanceResult, ledgerResult, incomeResult, partyResult] = await Promise.all([
       supabase.from("companies").select("display_name,legal_name").eq("id", cid).single(),
       supabase.from("accounts").select("id,code,name_ar,type,is_posting,is_active").eq("company_id", cid).eq("is_active", true).order("code"),
       supabase.from("fiscal_periods").select("id,name,starts_on,ends_on,status").eq("company_id", cid).eq("status", "open").order("starts_on", { ascending: false }).limit(1).maybeSingle(),
       supabase.from("journal_entries").select("id,entry_number,entry_date,description,status").eq("company_id", cid).order("entry_date", { ascending: false }).limit(30),
       supabase.from("trial_balance").select("*").eq("company_id", cid).order("account_code"),
       supabase.from("general_ledger").select("*").eq("company_id", cid).order("entry_date", { ascending: false }).limit(500),
-      supabase.from("income_statement_accounts").select("*").eq("company_id", cid).order("account_code"),
+      supabase.from("income_statement_accounts").select("*").eq("company_id", cid).order("account_code"),\n      supabase.from("parties").select("id,code,name,party_type,phone,tax_number,is_active").eq("company_id", cid).order("name"),
     ]);
     if (companyResult.data) setCompanyName(companyResult.data.display_name || companyResult.data.legal_name);
     if (accountResult.error) setNotice(accountResult.error.message); else setAccounts((accountResult.data ?? []) as Account[]);
@@ -85,7 +85,7 @@ export default function Dashboard() {
     if (entryResult.error) setNotice(entryResult.error.message); else setEntries((entryResult.data ?? []) as Entry[]);
     if (balanceResult.error) setNotice(balanceResult.error.message); else setTrialBalance(balanceResult.data ?? []);
     if (ledgerResult.error) setNotice(ledgerResult.error.message); else setGeneralLedger(ledgerResult.data ?? []);
-    if (incomeResult.error) setNotice(incomeResult.error.message); else setIncomeAccounts(incomeResult.data ?? []);
+    if (incomeResult.error) setNotice(incomeResult.error.message); else setIncomeAccounts(incomeResult.data ?? []);\n    if (partyResult.error) setNotice(partyResult.error.message); else setParties(partyResult.data ?? []);
     setLoadingData(false);
   }, [supabase, user]);
 
@@ -178,6 +178,22 @@ export default function Dashboard() {
     await refreshWorkspace();
   }
 
+  async function addParty(event: FormEvent) {
+    event.preventDefault();
+    if (!supabase || !companyId) return;
+    if (!partyCode.trim() || !partyName.trim()) { setNotice("رمز واسم العميل أو المورد مطلوبان."); return; }
+    setBusy(true); setNotice("");
+    const { error } = await supabase.from("parties").insert({
+      company_id: companyId, code: partyCode.trim(), name: partyName.trim(),
+      party_type: partyType, phone: partyPhone.trim() || null, tax_number: partyTax.trim() || null,
+    });
+    setBusy(false);
+    if (error) { setNotice(error.message); return; }
+    setPartyCode(""); setPartyName(""); setPartyPhone(""); setPartyTax("");
+    setNotice("تم حفظ بيانات الطرف بنجاح.");
+    await refreshWorkspace();
+  }
+
   async function postJournal(entryId: string) {
     if (!supabase || !appUserId) return;
     setBusy(true); setNotice("");
@@ -236,7 +252,7 @@ export default function Dashboard() {
       <div className="brand"><span className="brand-mark">ش</span><div><b>الشموخ ERP</b><small>النظام المحاسبي</small></div></div>
       <div className="company-switch"><small>الشركة الحالية</small><strong>{companyName}</strong></div>
       <div className="nav-caption">القائمة الرئيسية</div>
-      <nav>{navItems.map((item, index) => <button key={item} className={active === item ? "nav-item active" : "nav-item"} onClick={() => setActive(item)}><span>{["▦", "⇄", "☷", "▤", "⚖", "↗"][index]}</span>{item}</button>)}</nav>
+      <nav>{navItems.map((item, index) => <button key={item} className={active === item ? "nav-item active" : "nav-item"} onClick={() => setActive(item)}><span>{["▦", "⇄", "☷", "♙", "▤", "⚖", "↗"][index]}</span>{item}</button>)}</nav>
       <div className="sidebar-bottom"><span className="status-dot" /> متصل بقاعدة البيانات</div>
     </aside>
     <main className="main-area">
@@ -263,6 +279,7 @@ export default function Dashboard() {
         </section>}
         {active === "دليل الحسابات" && <section className="panel"><h2>دليل الحسابات</h2><div className="table-wrap"><table><thead><tr><th>الرمز</th><th>اسم الحساب</th><th>النوع</th><th>طبيعة الحساب</th></tr></thead><tbody>{accounts.map((a) => <tr key={a.id}><td>{a.code}</td><td>{a.name_ar}</td><td>{a.type}</td><td>{a.is_posting ? "حساب حركة" : "حساب تجميعي"}</td></tr>)}</tbody></table></div></section>}
         {active === "ميزان المراجعة" && <section className="panel"><h2>ميزان المراجعة</h2><div className="table-wrap"><table><thead><tr><th>الرمز</th><th>الحساب</th><th>مدين</th><th>دائن</th><th>رصيد مدين</th><th>رصيد دائن</th></tr></thead><tbody>{trialBalance.map((a) => <tr key={a.account_id}><td>{a.account_code}</td><td>{a.account_name}</td><td>{formatSAR(Math.round(Number(a.debit_total) * 100))}</td><td>{formatSAR(Math.round(Number(a.credit_total) * 100))}</td><td>{formatSAR(Math.round(Number(a.debit_balance) * 100))}</td><td>{formatSAR(Math.round(Number(a.credit_balance) * 100))}</td></tr>)}</tbody></table></div></section>}
+        {active === "العملاء والموردون" && <section className="panel"><div className="panel-heading"><div><h2>سجل العملاء والموردين</h2><p>إدارة بيانات الأطراف وربطها بالقيود المحاسبية</p></div></div><form className="journal-form" onSubmit={addParty}><div className="form-fields"><label>نوع الطرف<select value={partyType} onChange={(e) => setPartyType(e.target.value)}><option value="customer">عميل</option><option value="supplier">مورد</option><option value="both">عميل ومورد</option></select></label><label>الرمز<input required value={partyCode} onChange={(e) => setPartyCode(e.target.value)} placeholder="C-001" /></label><label className="description-field">الاسم<input required value={partyName} onChange={(e) => setPartyName(e.target.value)} placeholder="اسم العميل أو المورد" /></label></div><div className="form-fields"><label>الهاتف<input value={partyPhone} onChange={(e) => setPartyPhone(e.target.value)} /></label><label>الرقم الضريبي<input value={partyTax} onChange={(e) => setPartyTax(e.target.value)} /></label><button className="primary-btn" disabled={busy}>حفظ الطرف</button></div></form><div className="table-wrap"><table><thead><tr><th>الرمز</th><th>الاسم</th><th>النوع</th><th>الهاتف</th><th>الرقم الضريبي</th></tr></thead><tbody>{parties.map((p) => <tr key={p.id}><td>{p.code}</td><td>{p.name}</td><td>{p.party_type === "customer" ? "عميل" : p.party_type === "supplier" ? "مورد" : "عميل ومورد"}</td><td>{p.phone || "—"}</td><td>{p.tax_number || "—"}</td></tr>)}</tbody></table></div></section>}
         {active === "الأستاذ العام" && <section className="panel"><h2>الأستاذ العام</h2><div className="table-wrap"><table><thead><tr><th>التاريخ</th><th>رقم القيد</th><th>الحساب</th><th>البيان</th><th>مدين</th><th>دائن</th><th>الرصيد الجاري</th></tr></thead><tbody>{generalLedger.map((row, i) => <tr key={row.journal_entry_id + "-" + row.line_number + "-" + i}><td>{row.entry_date}</td><td>{row.entry_number}</td><td>{row.account_code} — {row.account_name}</td><td>{row.line_description || row.entry_description}</td><td>{formatSAR(Math.round(Number(row.debit) * 100))}</td><td>{formatSAR(Math.round(Number(row.credit) * 100))}</td><td>{formatSAR(Math.round(Number(row.running_balance) * 100))}</td></tr>)}</tbody></table></div></section>}
         {active === "قائمة الدخل" && <section className="panel"><h2>قائمة الدخل حسب الحسابات</h2><div className="table-wrap"><table><thead><tr><th>الرمز</th><th>الحساب</th><th>النوع</th><th>قيمة الفترة</th></tr></thead><tbody>{incomeAccounts.map((row) => <tr key={row.account_id}><td>{row.account_code}</td><td>{row.account_name}</td><td>{row.account_type === "revenue" ? "إيراد" : "مصروف"}</td><td>{formatSAR(Math.round(Number(row.period_amount) * 100))}</td></tr>)}</tbody></table></div></section>}
         <footer className="page-footer"><span>© نظام الشموخ ERP</span><span>أساس الاستحقاق · القيد المزدوج · SAR</span></footer>
