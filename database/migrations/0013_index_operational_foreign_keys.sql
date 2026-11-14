@@ -1,0 +1,23 @@
+-- Cover foreign-key lookup paths for operational tables.
+begin;
+create index if not exists asset_depreciation_company_journal_idx on public.asset_depreciation(company_id,journal_entry_id);
+create index if not exists cash_transactions_company_account_idx on public.cash_transactions(company_id,cash_account_id);
+create index if not exists cash_transactions_company_party_idx on public.cash_transactions(company_id,party_id);
+create index if not exists cash_transactions_created_by_idx on public.cash_transactions(created_by);
+create index if not exists expenses_company_cash_account_idx on public.expenses(company_id,cash_account_id);
+create index if not exists expenses_company_party_idx on public.expenses(company_id,party_id);
+create index if not exists expenses_created_by_idx on public.expenses(created_by);
+create index if not exists purchase_invoice_lines_company_idx on public.purchase_invoice_lines(company_id);
+create index if not exists purchase_invoice_lines_company_invoice_idx on public.purchase_invoice_lines(company_id,invoice_id);
+create index if not exists purchase_invoice_lines_company_product_idx on public.purchase_invoice_lines(company_id,product_id);
+create index if not exists purchase_invoices_company_supplier_idx on public.purchase_invoices(company_id,supplier_id);
+create index if not exists purchase_invoices_company_warehouse_idx on public.purchase_invoices(company_id,warehouse_id);
+create index if not exists purchase_invoices_created_by_idx on public.purchase_invoices(created_by);
+create index if not exists sales_invoice_lines_company_idx on public.sales_invoice_lines(company_id);
+create index if not exists sales_invoice_lines_company_invoice_idx on public.sales_invoice_lines(company_id,invoice_id);
+create index if not exists sales_invoice_lines_company_product_idx on public.sales_invoice_lines(company_id,product_id);
+create index if not exists sales_invoices_company_customer_idx on public.sales_invoices(company_id,customer_id);
+create index if not exists sales_invoices_created_by_idx on public.sales_invoices(created_by);
+create index if not exists stock_movements_company_warehouse_idx on public.stock_movements(company_id,warehouse_id);
+create index if not exists stock_movements_created_by_idx on public.stock_movements(created_by);
+commit;
