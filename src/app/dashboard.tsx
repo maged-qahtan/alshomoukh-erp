@@ -157,6 +157,13 @@ export default function Dashboard() {
   }), { debit: 0, credit: 0 }), [lines]);
   const balanced = totals.debit > 0 && totals.debit === totals.credit;
   const filteredLedger = generalLedger.filter((row:any) => (!reportFrom || row.entry_date >= reportFrom) && (!reportTo || row.entry_date <= reportTo));
+  const filteredEntries = entries.filter((entry) => {
+    const term = journalSearch.trim().toLowerCase();
+    return (!term || String(entry.entry_number).includes(term) || entry.description.toLowerCase().includes(term))
+      && (journalStatus === "all" || entry.status === journalStatus)
+      && (!journalFrom || entry.entry_date >= journalFrom)
+      && (!journalTo || entry.entry_date <= journalTo);
+  });
 
   async function handleAuth(event: FormEvent) {
     event.preventDefault();
