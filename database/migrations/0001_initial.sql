@@ -156,7 +156,7 @@ create table audit_logs (
 
 -- Only the posting procedure may move a draft entry to posted.
 create or replace function guard_journal_entry_mutation()
-returns trigger language plpgsql as $
+returns trigger language plpgsql as $$
 begin
   if tg_op = 'DELETE' then
     if old.status in ('posted', 'reversed') then
@@ -183,7 +183,7 @@ for each row execute function guard_journal_entry_mutation();
 
 -- Posted journal entries are immutable. Corrections must use reversal/adjustment entries.
 create or replace function prevent_posted_journal_mutation()
-returns trigger language plpgsql as $$
+returns trigger language plpgsql as $$$
 declare
   target_entry_id uuid;
   current_status journal_status;
@@ -203,7 +203,7 @@ before insert or update or delete on journal_lines
 for each row execute function prevent_posted_journal_mutation();
 
 create or replace function post_journal_entry(p_entry_id uuid, p_user_id uuid)
-returns void language plpgsql as $$
+returns void language plpgsql as $$$
 declare
   entry_row journal_entries%rowtype;
   debit_total numeric(20,2);
