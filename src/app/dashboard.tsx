@@ -64,7 +64,8 @@ export default function Dashboard() {
   const [entryDate, setEntryDate] = useState(today);
   const [description, setDescription] = useState("");
   const [lines, setLines] = useState<Line[]>([]);
-  const [loadingData, setLoadingData] = useState(false);\n  const [reportFrom, setReportFrom] = useState("");\n  const [reportTo, setReportTo] = useState("");
+  const [loadingData, setLoadingData] = useState(false);
+  const [reportFrom, setReportFrom] = useState("");\n  const [reportTo, setReportTo] = useState("");
 
   useEffect(() => {
     if (!supabase) { setAuthLoading(false); return; }
