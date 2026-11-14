@@ -146,7 +146,7 @@ export default function Dashboard() {
     if (entryResult.error) setNotice(entryResult.error.message); else setEntries((entryResult.data ?? []) as Entry[]);
     if (balanceResult.error) setNotice(balanceResult.error.message); else setTrialBalance(balanceResult.data ?? []);
     if (ledgerResult.error) setNotice(ledgerResult.error.message); else setGeneralLedger(ledgerResult.data ?? []);
-    if (selectedLedgerAccount && !(accountResult.data ?? []).some((a:any) => a.id === selectedLedgerAccount)) setSelectedLedgerAccount("");
+
     if (incomeResult.error) setNotice(incomeResult.error.message); else setIncomeAccounts(incomeResult.data ?? []);
     if (partyResult.error) setNotice(partyResult.error.message); else setParties(partyResult.data ?? []);
     if (centerResult.error) setNotice(centerResult.error.message); else setCostCenters(centerResult.data ?? []);
@@ -265,7 +265,7 @@ export default function Dashboard() {
       .order("entry_number", { ascending: true })
       .order("line_number", { ascending: true })
       .limit(accountId ? 1000 : 500);
-    if (error) setNotice(error.message);
+    if (error) { setGeneralLedger([]); setNotice(error.message); }
     else setGeneralLedger(data ?? []);
     setLedgerLoading(false);
   }
@@ -483,7 +483,7 @@ export default function Dashboard() {
     <aside className={mobileMenuOpen ? "sidebar sidebar-open" : "sidebar"}>
       <button type="button" className="mobile-sidebar-close" aria-label="إغلاق القائمة" onClick={() => setMobileMenuOpen(false)}>×</button>
       <div className="brand"><span className="brand-mark">ش</span><div><b>الشموخ ERP</b><small>النظام المحاسبي</small></div></div>
-      <div className="company-switch"><small>الشركة الحالية</small>{companies.length > 1 ? <select aria-label="اختيار الشركة" value={companyId ?? ""} onChange={(e) => { setCompanyId(e.target.value); setActive("لوحة التحكم"); setNotice(""); setLines([]); setShowForm(false); }}><option value="" disabled>اختر الشركة</option>{companies.map((company) => <option key={company.id} value={company.id}>{company.display_name || company.legal_name}</option>)}</select> : <strong>{companyName}</strong>}</div>
+      <div className="company-switch"><small>الشركة الحالية</small>{companies.length > 1 ? <select aria-label="اختيار الشركة" value={companyId ?? ""} onChange={(e) => { setCompanyId(e.target.value); setSelectedLedgerAccount(""); setReportFrom(""); setReportTo(""); setActive("لوحة التحكم"); setNotice(""); setLines([]); setShowForm(false); }}><option value="" disabled>اختر الشركة</option>{companies.map((company) => <option key={company.id} value={company.id}>{company.display_name || company.legal_name}</option>)}</select> : <strong>{companyName}</strong>}</div>
       <div className="nav-caption">القائمة الرئيسية</div>
       <nav>{navItems.map((item, index) => <button key={item} className={active === item ? "nav-item active" : "nav-item"} onClick={() => { setActive(item); setMobileMenuOpen(false); }}><span>{["▦", "⇄", "☷", "♙", "⌖", "▤", "⚖", "↗", "▣", "▤", "↕", "%"][index]}</span>{item}</button>)}</nav>
       <div className="sidebar-bottom"><span className="status-dot" /> متصل بقاعدة البيانات</div>
