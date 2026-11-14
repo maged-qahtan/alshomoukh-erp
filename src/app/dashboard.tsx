@@ -261,9 +261,9 @@ export default function Dashboard() {
     let query = supabase.from("general_ledger").select("*").eq("company_id", companyId);
     if (accountId) query = query.eq("account_id", accountId);
     const { data, error } = await query
-      .order("entry_date", { ascending: true })
-      .order("entry_number", { ascending: true })
-      .order("line_number", { ascending: true })
+      .order("entry_date", { ascending: false })
+      .order("entry_number", { ascending: false })
+      .order("line_number", { ascending: false })
       .limit(accountId ? 1000 : 500);
     if (error) { setGeneralLedger([]); setNotice(error.message); }
     else setGeneralLedger(data ?? []);
