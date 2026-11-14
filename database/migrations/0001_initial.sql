@@ -169,9 +169,9 @@ begin
     raise exception 'Posted journal entries are immutable.';
   end if;
 
-  if old.status = 'draft' and new.status = 'posted'
-     and current_setting('app.posting_entry_id', true) is distinct from old.id::text then
-    raise exception 'Use post_journal_entry() to post an entry.';
+  if old.status = 'draft' and new.status <> 'draft'
+     and not (new.status = 'posted' and current_setting('app.posting_entry_id', true) = old.id::text) then
+    raise exception 'Draft status changes must use the controlled posting procedure.';
   end if;
   return new;
 end;
