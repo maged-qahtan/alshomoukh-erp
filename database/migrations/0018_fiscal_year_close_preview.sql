@@ -20,19 +20,20 @@ begin
     raise exception 'Draft journal entries remain in this period.';
   end if;
 
-  with balances as (
-    select a.id account_id,a.code account_code,a.name_ar account_name,a.type account_type,
-      coalesce(sum(l.debit),0)::numeric(20,2) debit_total,
-      coalesce(sum(l.credit),0)::numeric(20,2) credit_total
-    from public.accounts a
-    left join public.journal_lines l on l.account_id=a.id
-    left join public.journal_entries e on e.id=l.journal_entry_id
-      and e.company_id=v_period.company_id and e.fiscal_period_id=v_period.id and e.status='posted'
-    where a.company_id=v_period.company_id and a.is_active and a.is_posting
-    group by a.id,a.code,a.name_ar,a.type
+  with posted_totals as (
+    select l.account_id,sum(l.debit)::numeric(20,2) debit_total,sum(l.credit)::numeric(20,2) credit_total
+    from public.journal_lines l
+    join public.journal_entries e on e.id=l.journal_entry_id
+    where e.company_id=v_period.company_id and e.fiscal_period_id=v_period.id and e.status='posted'
+    group by l.account_id
   ), enriched as (
-    select *, case when account_type in ('asset','expense') then debit_total-credit_total else credit_total-debit_total end::numeric(20,2) signed_balance
-    from balances
+    select a.id account_id,a.code account_code,a.name_ar account_name,a.type account_type,
+      coalesce(t.debit_total,0)::numeric(20,2) debit_total,
+      coalesce(t.credit_total,0)::numeric(20,2) credit_total,
+      case when a.type in ('asset','expense') then coalesce(t.debit_total,0)-coalesce(t.credit_total,0)
+      else coalesce(t.credit_total,0)-coalesce(t.debit_total,0) end::numeric(20,2) signed_balance
+    from public.accounts a left join posted_totals t on t.account_id=a.id
+    where a.company_id=v_period.company_id and a.is_active and a.is_posting
   )
   select jsonb_build_object(
     'period',jsonb_build_object('id',v_period.id,'name',v_period.name,'starts_on',v_period.starts_on,'ends_on',v_period.ends_on,'status',v_period.status),
