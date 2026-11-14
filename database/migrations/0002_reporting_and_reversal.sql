@@ -89,7 +89,7 @@ end;
 $$;
 
 -- Reversed originals remain in the ledger together with their reversing entries.
-create or replace view general_ledger as
+create or replace view general_ledger with (security_invoker = true) as
 select
   e.company_id,
   l.account_id,
@@ -119,7 +119,7 @@ join journal_lines l on l.journal_entry_id = e.id
 join accounts a on a.id = l.account_id and a.company_id = e.company_id
 where e.status in ('posted', 'reversed');
 
-create or replace view trial_balance as
+create or replace view trial_balance with (security_invoker = true) as
 select
   a.company_id,
   a.id as account_id,
@@ -139,7 +139,7 @@ left join (
   group by l.company_id, l.account_id
 ) b on b.company_id = a.company_id and b.account_id = a.id
 where a.is_active = true;
-create or replace view income_statement_accounts as
+create or replace view income_statement_accounts with (security_invoker = true) as
 select
   e.company_id,
   a.id as account_id,
