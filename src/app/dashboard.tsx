@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
 import type { User } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/client";
 import { formatSAR } from "@/lib/accounting/validate-journal";
@@ -103,7 +103,7 @@ export default function Dashboard() {
   }), { debit: 0, credit: 0 }), [lines]);
   const balanced = totals.debit > 0 && totals.debit === totals.credit;
 
-  async function handleAuth(event: React.FormEvent) {
+  async function handleAuth(event: FormEvent) {
     event.preventDefault();
     if (!supabase) return;
     setBusy(true); setNotice("");
@@ -120,7 +120,7 @@ export default function Dashboard() {
     }
   }
 
-  async function createCompany(event: React.FormEvent) {
+  async function createCompany(event: FormEvent) {
     event.preventDefault();
     if (!supabase) return;
     setBusy(true); setNotice("");
