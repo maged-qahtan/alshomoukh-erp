@@ -6,7 +6,7 @@ import { createClient } from "@/lib/supabase/client";
 import { formatSAR } from "@/lib/accounting/validate-journal";
 import Operations from "./operations";
 
-type Account = { id: string; parent_id: string | null; code: string; name_ar: string; type: string; is_posting: boolean; is_active: boolean };
+type Account = { id: string; parent_id: string | null; code: string; name_ar: string; name_en?: string; type: string; is_posting: boolean; is_active: boolean };
 type Line = { account_id: string; debit: string; credit: string; description: string; party_id?: string | null; cost_center_id?: string | null };
 type Entry = { id: string; entry_number: number; entry_date: string; description: string; status: string; source_type?: string };
 
@@ -48,6 +48,15 @@ export default function Dashboard() {
   const [accountSearch, setAccountSearch] = useState("");
   const [accountTypeFilter, setAccountTypeFilter] = useState("all");
   const [accountStatusFilter, setAccountStatusFilter] = useState("active");
+  const [accountFormOpen, setAccountFormOpen] = useState(false);
+  const [editingAccountId, setEditingAccountId] = useState<string | null>(null);
+  const [accountCode, setAccountCode] = useState("");
+  const [accountNameAr, setAccountNameAr] = useState("");
+  const [accountNameEn, setAccountNameEn] = useState("");
+  const [accountType, setAccountType] = useState("asset");
+  const [accountParentId, setAccountParentId] = useState("");
+  const [accountIsPosting, setAccountIsPosting] = useState(true);
+
   const [entries, setEntries] = useState<Entry[]>([]);
   const [trialBalance, setTrialBalance] = useState<any[]>([]);
   const [generalLedger, setGeneralLedger] = useState<any[]>([]);
@@ -117,7 +126,7 @@ export default function Dashboard() {
     setCompanyId(cid);
     const [companyResult, accountResult, periodResult, entryResult, balanceResult, ledgerResult, incomeResult, partyResult, centerResult, sheetResult, cashFlowResult, vatResult] = await Promise.all([
       supabase.from("companies").select("display_name,legal_name").eq("id", cid).single(),
-      supabase.from("accounts").select("id,parent_id,code,name_ar,type,is_posting,is_active").eq("company_id", cid).order("code"),
+      supabase.from("accounts").select("id,parent_id,code,name_ar,name_en,type,is_posting,is_active").eq("company_id", cid).order("code"),
       supabase.from("fiscal_periods").select("id,name,starts_on,ends_on,status").eq("company_id", cid).eq("status", "open").order("starts_on", { ascending: false }).limit(1).maybeSingle(),
       supabase.from("journal_entries").select("id,entry_number,entry_date,description,status,source_type").eq("company_id", cid).order("entry_date", { ascending: false }).limit(30),
       supabase.from("trial_balance").select("*").eq("company_id", cid).order("account_code"),
@@ -302,6 +311,61 @@ export default function Dashboard() {
     await refreshWorkspace();
   }
 
+
+  function resetAccountForm() {
+    setAccountFormOpen(false); setEditingAccountId(null); setAccountCode("");
+    setAccountNameAr(""); setAccountNameEn(""); setAccountType("asset");
+    setAccountParentId(""); setAccountIsPosting(true);
+  }
+
+  function startAccountEdit(account: Account) {
+    setEditingAccountId(account.id); setAccountCode(account.code);
+    setAccountNameAr(account.name_ar); setAccountNameEn(account.name_en ?? "");
+    setAccountType(account.type); setAccountParentId(account.parent_id ?? "");
+    setAccountIsPosting(account.is_posting); setAccountFormOpen(true);
+  }
+
+  async function saveAccount(event: FormEvent) {
+    event.preventDefault();
+    if (!supabase || !companyId) return;
+    const code = accountCode.trim(), nameAr = accountNameAr.trim(), nameEn = accountNameEn.trim();
+    if (!code || !nameAr || !nameEn) { setNotice("رمز الحساب واسمه بالعربية والإنجليزية حقول مطلوبة."); return; }
+    if (accounts.some((a) => a.code.toLocaleLowerCase() === code.toLocaleLowerCase() && a.id !== editingAccountId)) { setNotice("رمز الحساب مستخدم بالفعل في هذه الشركة."); return; }
+    const parent = accountParentId ? accounts.find((a) => a.id === accountParentId) : null;
+    if (accountParentId && (!parent || !parent.is_active || parent.is_posting || parent.type !== accountType)) { setNotice("اختر حساباً أباً نشطاً وتجميعياً ومن النوع نفسه."); return; }
+    if (editingAccountId && accountParentId) {
+      let cursor = parent; const seen = new Set<string>();
+      while (cursor && !seen.has(cursor.id)) {
+        if (cursor.id === editingAccountId) { setNotice("لا يمكن جعل الحساب الفرعي أباً للحساب الحالي."); return; }
+        seen.add(cursor.id); cursor = cursor.parent_id ? accounts.find((a) => a.id === cursor!.parent_id) : undefined;
+      }
+    }
+    if (!accountIsPosting && accounts.some((a) => a.parent_id === editingAccountId && a.is_active)) { setNotice("لا يمكن تحويل الحساب إلى تجميعي مع وجود حسابات فرعية نشطة تحته."); return; }
+    setBusy(true); setNotice("");
+    const payload = { company_id: companyId, code, name_ar: nameAr, name_en: nameEn, type: accountType, parent_id: accountParentId || null, is_posting: accountIsPosting };
+    const result = editingAccountId
+      ? await supabase.from("accounts").update({ code, name_ar: nameAr, name_en: nameEn, parent_id: accountParentId || null, is_posting: accountIsPosting }).eq("id", editingAccountId).eq("company_id", companyId)
+      : await supabase.from("accounts").insert(payload);
+    setBusy(false);
+    if (result.error) { setNotice(result.error.message); return; }
+    const wasEditing = Boolean(editingAccountId); resetAccountForm();
+    setNotice(wasEditing ? "تم تحديث الحساب بنجاح." : "تم إنشاء الحساب بنجاح.");
+    await refreshWorkspace();
+  }
+
+  async function toggleAccountStatus(account: Account) {
+    if (!supabase || !companyId) return;
+    if (account.is_active && accounts.some((a) => a.parent_id === account.id && a.is_active)) { setNotice("لا يمكن إيقاف حساب أب لديه حسابات فرعية نشطة. أوقف الحسابات الفرعية أولاً."); return; }
+    const next = !account.is_active;
+    if (!window.confirm(next ? "هل تريد إعادة تنشيط هذا الحساب؟" : "سيبقى الحساب وسجلاته التاريخية محفوظة. هل تريد إيقافه؟")) return;
+    setBusy(true); setNotice("");
+    const { error } = await supabase.from("accounts").update({ is_active: next }).eq("id", account.id).eq("company_id", companyId);
+    setBusy(false);
+    if (error) { setNotice(error.message); return; }
+    setNotice(next ? "تم تنشيط الحساب." : "تم إيقاف الحساب مع الاحتفاظ بسجلاته.");
+    await refreshWorkspace();
+  }
+
   async function addParty(event: FormEvent) {
     event.preventDefault();
     if (!supabase || !companyId) return;
@@ -477,7 +541,19 @@ export default function Dashboard() {
           {selectedEntry && <section className="panel journal-detail"><div className="panel-heading"><div><h3>سند القيد رقم {selectedEntry.entry_number}</h3><p>{selectedEntry.entry_date} · {selectedEntry.status === "posted" ? "مرحّل" : selectedEntry.status === "reversed" ? "معكوس" : "مسودة"}</p></div><div className="report-actions"><button className="secondary-btn" onClick={()=>window.print()}>طباعة السند</button><button className="text-btn" onClick={()=>setSelectedEntry(null)}>إغلاق</button></div></div><p><b>البيان:</b> {selectedEntry.description}</p><div className="table-wrap"><table><thead><tr><th>الحساب</th><th>الطرف</th><th>مركز التكلفة</th><th>بيان السطر</th><th>مدين</th><th>دائن</th></tr></thead><tbody>{selectedEntry.lines.map((line:any)=><tr key={line.id}><td>{accounts.find(a=>a.id===line.account_id)?.code} — {accounts.find(a=>a.id===line.account_id)?.name_ar}</td><td>{parties.find((p:any)=>p.id===line.party_id)?.name || "—"}</td><td>{costCenters.find((c:any)=>c.id===line.cost_center_id)?.name_ar || "—"}</td><td>{line.description || "—"}</td><td>{formatSAR(Math.round(Number(line.debit)*100))}</td><td>{formatSAR(Math.round(Number(line.credit)*100))}</td></tr>)}</tbody></table></div></section>}
         </section>}
         {active === "دليل الحسابات" && <section className="panel account-directory">
-          <div className="panel-heading account-directory-heading"><div><h2>دليل الحسابات</h2><p>هيكل الحسابات الرئيسي والفرعي للشركة الحالية</p></div><button className="secondary-btn" onClick={() => downloadCsv("chart-of-accounts.csv", [["رمز الحساب","اسم الحساب","النوع","التصنيف","الحالة"], ...accountRows.map((a) => [a.code,a.name_ar,accountTypeLabel(a.type),a.is_posting ? "حساب حركة" : "حساب تجميعي",a.is_active ? "نشط" : "موقوف"])])}>تصدير الدليل</button></div>
+          <div className="panel-heading account-directory-heading"><div><h2>دليل الحسابات</h2><p>هيكل الحسابات الرئيسي والفرعي للشركة الحالية</p></div><div className="report-actions"><button className="primary-btn" onClick={() => { resetAccountForm(); setAccountFormOpen(true); }}>＋ حساب جديد</button><button className="secondary-btn" onClick={() => downloadCsv("chart-of-accounts.csv", [["رمز الحساب","اسم الحساب","النوع","التصنيف","الحالة"], ...accountRows.map((a) => [a.code,a.name_ar,accountTypeLabel(a.type),a.is_posting ? "حساب حركة" : "حساب تجميعي",a.is_active ? "نشط" : "موقوف"])])}>تصدير الدليل</button></div>
+          {accountFormOpen && <form className="journal-form account-editor" onSubmit={saveAccount}>
+            <div className="panel-heading"><div><h3>{editingAccountId ? "تعديل الحساب" : "إضافة حساب جديد"}</h3><p>يُحفظ الحساب ضمن دليل الشركة الحالية فقط</p></div><button type="button" className="text-btn" onClick={resetAccountForm}>إغلاق</button></div>
+            <div className="form-fields account-editor-grid">
+              <label>رمز الحساب<input required value={accountCode} onChange={(e) => setAccountCode(e.target.value)} placeholder="مثال: 110101" /></label>
+              <label>اسم الحساب بالعربية<input required value={accountNameAr} onChange={(e) => setAccountNameAr(e.target.value)} /></label>
+              <label>اسم الحساب بالإنجليزية<input required dir="ltr" value={accountNameEn} onChange={(e) => setAccountNameEn(e.target.value)} placeholder="Account name" /></label>
+              <label>نوع الحساب<select value={accountType} disabled={Boolean(editingAccountId)} onChange={(e) => { setAccountType(e.target.value); setAccountParentId(""); }}><option value="asset">الأصول</option><option value="liability">الالتزامات</option><option value="equity">حقوق الملكية</option><option value="revenue">الإيرادات</option><option value="expense">المصروفات</option></select></label>
+              <label>الحساب الأب<select value={accountParentId} onChange={(e) => setAccountParentId(e.target.value)}><option value="">حساب رئيسي (دون أب)</option>{accounts.filter((x) => x.is_active && !x.is_posting && x.type === accountType && x.id !== editingAccountId).filter((x) => { if (!editingAccountId) return true; let p: Account | undefined = x; const seen = new Set<string>(); while (p && !seen.has(p.id)) { if (p.id === editingAccountId) return false; seen.add(p.id); p = p.parent_id ? accounts.find((z) => z.id === p!.parent_id) : undefined; } return true; }).map((x) => <option key={x.id} value={x.id}>{x.code} — {x.name_ar}</option>)}</select></label>
+              <label>طبيعة الحساب<select value={accountIsPosting ? "posting" : "group"} onChange={(e) => setAccountIsPosting(e.target.value === "posting")}><option value="posting">حساب حركة — يقبل القيود</option><option value="group">حساب تجميعي — لا يقبل القيود</option></select></label>
+            </div>
+            <div className="form-actions"><button className="primary-btn" disabled={busy}>{busy ? "جارٍ الحفظ…" : editingAccountId ? "حفظ التعديلات" : "إنشاء الحساب"}</button><button type="button" className="secondary-btn" onClick={resetAccountForm}>إلغاء</button></div>
+          </form>}
           <div className="account-stats">
             <div><small>إجمالي الحسابات</small><strong>{accounts.length}</strong></div>
             <div><small>حسابات الحركة</small><strong>{accounts.filter((a) => a.is_posting).length}</strong></div>
@@ -490,9 +566,9 @@ export default function Dashboard() {
             <label>الحالة<select value={accountStatusFilter} onChange={(e) => setAccountStatusFilter(e.target.value)}><option value="active">النشطة</option><option value="inactive">الموقوفة</option><option value="all">الكل</option></select></label>
             <button className="text-btn" onClick={() => { setAccountSearch(""); setAccountTypeFilter("all"); setAccountStatusFilter("active"); }}>مسح الفلاتر</button>
           </div>
-          <div className="table-wrap"><table className="account-tree-table"><thead><tr><th>رمز الحساب</th><th>اسم الحساب</th><th>التصنيف</th><th>طبيعة الحساب</th><th>الحالة</th></tr></thead><tbody>
-            {accountRows.map((a) => <tr key={a.id} className={!a.is_active ? "account-inactive" : ""}><td className="account-code-cell">{a.code}</td><td><div className="account-name-cell" style={{ paddingInlineStart: `${Math.min(a.depth, 6) * 20}px` }}><span className={a.parent_id ? "account-child-mark" : "account-root-mark"}>{a.parent_id ? "↳" : "▦"}</span><span>{a.name_ar}</span></div></td><td><span className={`account-type-pill type-${a.type}`}>{accountTypeLabel(a.type)}</span></td><td>{a.is_posting ? <span className="account-kind posting">حساب حركة</span> : <span className="account-kind group">حساب تجميعي</span>}</td><td><span className={a.is_active ? "account-status active" : "account-status inactive"}>{a.is_active ? "نشط" : "موقوف"}</span></td></tr>)}
-            {accountRows.length === 0 && <tr><td colSpan={5} className="account-empty">لا توجد حسابات مطابقة للفلاتر المحددة.</td></tr>}
+          <div className="table-wrap"><table className="account-tree-table"><thead><tr><th>رمز الحساب</th><th>اسم الحساب</th><th>التصنيف</th><th>طبيعة الحساب</th><th>الحالة</th><th>الإجراءات</th></tr></thead><tbody>
+            {accountRows.map((a) => <tr key={a.id} className={!a.is_active ? "account-inactive" : ""}><td className="account-code-cell">{a.code}</td><td><div className="account-name-cell" style={{ paddingInlineStart: `${Math.min(a.depth, 6) * 20}px` }}><span className={a.parent_id ? "account-child-mark" : "account-root-mark"}>{a.parent_id ? "↳" : "▦"}</span><span>{a.name_ar}</span></div></td><td><span className={`account-type-pill type-${a.type}`}>{accountTypeLabel(a.type)}</span></td><td>{a.is_posting ? <span className="account-kind posting">حساب حركة</span> : <span className="account-kind group">حساب تجميعي</span>}</td><td><span className={a.is_active ? "account-status active" : "account-status inactive"}>{a.is_active ? "نشط" : "موقوف"}</span></td><td><div className="account-row-actions"><button type="button" className="text-btn" disabled={busy} onClick={() => startAccountEdit(a)}>تعديل</button><button type="button" className="text-btn" disabled={busy} onClick={() => void toggleAccountStatus(a)}>{a.is_active ? "إيقاف" : "تنشيط"}</button></div></td></tr>)}
+            {accountRows.length === 0 && <tr><td colSpan={6} className="account-empty">لا توجد حسابات مطابقة للفلاتر المحددة.</td></tr>}
           </tbody></table></div>
           <p className="report-footnote">يظهر ترتيب الحسابات بحسب الرمز، مع توضيح مستوى الحساب اعتماداً على الحساب الأب المسجل في قاعدة البيانات. النتائج: {accountRows.length} من {accounts.length}.</p>
         </section>}
