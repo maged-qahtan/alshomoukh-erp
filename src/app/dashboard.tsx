@@ -202,6 +202,37 @@ export default function Dashboard() {
     setLines((current) => current.map((line, i) => i === index ? { ...line, [field]: value } : line));
   }
 
+  async function openJournalEntry(entryId: string, edit = false) {
+    if (!supabase || !companyId) return;
+    setBusy(true); setNotice("");
+    const { data: header, error: headerError } = await supabase.from("journal_entries")
+      .select("id,entry_number,entry_date,description,status,reference,created_at,posted_at")
+      .eq("id", entryId).eq("company_id", companyId).single();
+    if (headerError || !header) { setBusy(false); setNotice(headerError?.message || "تعذر تحميل القيد."); return; }
+    const { data: detailLines, error: linesError } = await supabase.from("journal_lines")
+      .select("id,line_number,account_id,description,debit,credit,party_id,cost_center_id")
+      .eq("journal_entry_id", entryId).eq("company_id", companyId).order("line_number");
+    setBusy(false);
+    if (linesError) { setNotice(linesError.message); return; }
+    setSelectedEntry({ ...header, lines: detailLines ?? [] });
+    if (edit) {
+      if (header.status !== "draft") { setNotice("لا يمكن تعديل قيد مرحّل أو معكوس."); return; }
+      setEditingEntryId(entryId);
+      setEntryDate(header.entry_date);
+      setDescription(header.description);
+      setLines((detailLines ?? []).map((line:any) => ({
+        account_id: line.account_id, debit: String(line.debit), credit: String(line.credit),
+        description: line.description ?? "",
+      })));
+      setShowForm(true);
+      setSelectedEntry(null);
+    }
+  }
+
+  function resetJournalForm() {
+    setShowForm(false); setEditingEntryId(null); setDescription(""); setEntryDate(today); setLines([]);
+  }
+
   async function saveJournal() {
     if (!supabase || !companyId || !periodId || !appUserId) {
       setNotice("لا توجد شركة أو فترة مالية مفتوحة. أكمل إعداد الشركة أولاً."); return;
@@ -219,18 +250,13 @@ export default function Dashboard() {
       setNotice("راجع الحسابات والمبالغ: يجب إدخال مبلغ في جهة واحدة فقط لكل سطر."); return;
     }
     setBusy(true); setNotice("");
-    const { data: entryId, error } = await supabase.rpc("save_draft_journal_entry", {
-      p_company_id: companyId,
-      p_fiscal_period_id: periodId,
-      p_entry_date: entryDate,
-      p_description: description.trim(),
-      p_lines: parsed,
-    });
-    if (error) { setBusy(false); setNotice(error.message); return; }
+    const result = editingEntryId
+      ? await supabase.rpc("update_draft_journal_entry", { p_entry_id: editingEntryId, p_entry_date: entryDate, p_description: description.trim(), p_lines: parsed })
+      : await supabase.rpc("save_draft_journal_entry", { p_company_id: companyId, p_fiscal_period_id: periodId, p_entry_date: entryDate, p_description: description.trim(), p_lines: parsed });
+    if (result.error) { setBusy(false); setNotice(result.error.message); return; }
     setBusy(false);
-    setNotice(`تم حفظ القيد رقم ${entryId} كمسودة بنجاح.`);
-    setShowForm(false); setDescription("");
-    setLines([]);
+    setNotice(editingEntryId ? "تم تحديث المسودة بنجاح." : "تم حفظ القيد كمسودة بنجاح.");
+    resetJournalForm();
     await refreshWorkspace();
   }
 
