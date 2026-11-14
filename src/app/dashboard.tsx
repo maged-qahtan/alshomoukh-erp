@@ -109,7 +109,7 @@ export default function Dashboard() {
     setBusy(true); setNotice("");
     const result = authMode === "login"
       ? await supabase.auth.signInWithPassword({ email, password })
-      : await supabase.auth.signUp({ email, password, options: { data: { full_name: fullName } } });
+      : await supabase.auth.signUp({ email, password, options: { data: { full_name: fullName }, emailRedirectTo: window.location.origin } });
     setBusy(false);
     if (result.error) { setNotice(result.error.message); return; }
     if (authMode === "signup" && !result.data.session) {
@@ -182,6 +182,22 @@ export default function Dashboard() {
     await refreshWorkspace();
   }
 
+  async function reverseJournal(entryId: string) {
+    if (!supabase || !appUserId || !periodId) return;
+    if (!window.confirm("سيتم إنشاء قيد عكسي مرتبط بالقيد الأصلي. هل تريد المتابعة؟")) return;
+    setBusy(true); setNotice("");
+    const { error } = await supabase.rpc("reverse_journal_entry", {
+      p_entry_id: entryId,
+      p_reversal_date: today,
+      p_fiscal_period_id: periodId,
+      p_user_id: appUserId,
+    });
+    setBusy(false);
+    if (error) { setNotice(error.message); return; }
+    setNotice("تم إنشاء القيد العكسي بنجاح.");
+    await refreshWorkspace();
+  }
+
   async function signOut() {
     if (!supabase) return;
     await supabase.auth.signOut();
@@ -237,7 +253,7 @@ export default function Dashboard() {
             <div className="totals-row"><div><small>إجمالي المدين</small><b>{formatSAR(totals.debit)}</b></div><div><small>إجمالي الدائن</small><b>{formatSAR(totals.credit)}</b></div><div className={balanced ? "balance-ok" : "balance-warn"}><small>حالة التوازن</small><b>{balanced ? "متوازن ✓" : "غير متوازن"}</b></div></div>
             <div className="form-actions"><button className="secondary-btn" onClick={() => setShowForm(false)}>إلغاء</button><button className="primary-btn" disabled={busy || !balanced} onClick={saveJournal}>{busy ? "جارٍ الحفظ…" : "حفظ المسودة"}</button></div>
           </div>}
-          <div className="table-wrap"><table><thead><tr><th>رقم</th><th>التاريخ</th><th>البيان</th><th>الحالة</th><th>إجراء</th></tr></thead><tbody>{entries.map((e) => <tr key={e.id}><td>{e.entry_number}</td><td>{e.entry_date}</td><td>{e.description}</td><td>{e.status === "posted" ? "مرحّل" : e.status === "reversed" ? "معكوس" : "مسودة"}</td><td>{e.status === "draft" && <button className="text-btn" disabled={busy} onClick={() => postJournal(e.id)}>ترحيل</button>}</td></tr>)}</tbody></table></div>
+          <div className="table-wrap"><table><thead><tr><th>رقم</th><th>التاريخ</th><th>البيان</th><th>الحالة</th><th>إجراء</th></tr></thead><tbody>{entries.map((e) => <tr key={e.id}><td>{e.entry_number}</td><td>{e.entry_date}</td><td>{e.description}</td><td>{e.status === "posted" ? "مرحّل" : e.status === "reversed" ? "معكوس" : "مسودة"}</td><td>{e.status === "draft" && <button className="text-btn" disabled={busy} onClick={() => postJournal(e.id)}>ترحيل</button>}{e.status === "posted" && <button className="text-btn" disabled={busy} onClick={() => reverseJournal(e.id)}>عكس القيد</button>}</td></tr>)}</tbody></table></div>
         </section>}
         {active === "دليل الحسابات" && <section className="panel"><h2>دليل الحسابات</h2><div className="table-wrap"><table><thead><tr><th>الرمز</th><th>اسم الحساب</th><th>النوع</th><th>طبيعة الحساب</th></tr></thead><tbody>{accounts.map((a) => <tr key={a.id}><td>{a.code}</td><td>{a.name_ar}</td><td>{a.type}</td><td>{a.is_posting ? "حساب حركة" : "حساب تجميعي"}</td></tr>)}</tbody></table></div></section>}
         {active === "ميزان المراجعة" && <section className="panel"><h2>ميزان المراجعة</h2><div className="table-wrap"><table><thead><tr><th>الرمز</th><th>الحساب</th><th>مدين</th><th>دائن</th><th>رصيد مدين</th><th>رصيد دائن</th></tr></thead><tbody>{trialBalance.map((a) => <tr key={a.account_id}><td>{a.account_code}</td><td>{a.account_name}</td><td>{formatSAR(Math.round(Number(a.debit_total) * 100))}</td><td>{formatSAR(Math.round(Number(a.credit_total) * 100))}</td><td>{formatSAR(Math.round(Number(a.debit_balance) * 100))}</td><td>{formatSAR(Math.round(Number(a.credit_balance) * 100))}</td></tr>)}</tbody></table></div></section>}
