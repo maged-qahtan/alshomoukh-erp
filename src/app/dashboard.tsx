@@ -201,7 +201,7 @@ export default function Dashboard() {
   const filteredLedger = orderedLedger
     .filter((row:any) => (!reportFrom || row.entry_date >= reportFrom) && (!reportTo || row.entry_date <= reportTo));
   const ledgerOpeningBalance = selectedLedgerAccount && reportFrom
-    ? [...orderedLedger].filter((row:any) => row.entry_date < reportFrom).at(-1)?.running_balance ?? null
+    ? ([...orderedLedger].filter((row:any) => row.entry_date < reportFrom).slice(-1)[0]?.running_balance ?? null)
     : null;
   const filteredEntries = entries.filter((entry) => {
     const term = journalSearch.trim().toLowerCase();
