@@ -8,7 +8,7 @@ import Operations from "./operations";
 
 type Account = { id: string; code: string; name_ar: string; type: string; is_posting: boolean; is_active: boolean };
 type Line = { account_id: string; debit: string; credit: string; description: string; party_id?: string | null; cost_center_id?: string | null };
-type Entry = { id: string; entry_number: number; entry_date: string; description: string; status: string };
+type Entry = { id: string; entry_number: number; entry_date: string; description: string; status: string; source_type?: string };
 
 const navItems = ["لوحة التحكم", "القيود اليومية", "دليل الحسابات", "العملاء والموردون", "مراكز التكلفة", "الأستاذ العام", "ميزان المراجعة", "قائمة الدخل", "العمليات", "الميزانية العمومية", "التدفقات النقدية", "ملخص الضريبة"];
 const today = new Date().toISOString().slice(0, 10);
@@ -73,6 +73,7 @@ export default function Dashboard() {
   const [journalTo, setJournalTo] = useState("");
   const [selectedEntry, setSelectedEntry] = useState<any | null>(null);
   const [editingEntryId, setEditingEntryId] = useState<string | null>(null);
+  const [isOpeningBalance, setIsOpeningBalance] = useState(false);
 
   useEffect(() => {
     if (!supabase) { setAuthLoading(false); return; }
@@ -112,7 +113,7 @@ export default function Dashboard() {
       supabase.from("companies").select("display_name,legal_name").eq("id", cid).single(),
       supabase.from("accounts").select("id,code,name_ar,type,is_posting,is_active").eq("company_id", cid).eq("is_active", true).order("code"),
       supabase.from("fiscal_periods").select("id,name,starts_on,ends_on,status").eq("company_id", cid).eq("status", "open").order("starts_on", { ascending: false }).limit(1).maybeSingle(),
-      supabase.from("journal_entries").select("id,entry_number,entry_date,description,status").eq("company_id", cid).order("entry_date", { ascending: false }).limit(30),
+      supabase.from("journal_entries").select("id,entry_number,entry_date,description,status,source_type").eq("company_id", cid).order("entry_date", { ascending: false }).limit(30),
       supabase.from("trial_balance").select("*").eq("company_id", cid).order("account_code"),
       supabase.from("general_ledger").select("*").eq("company_id", cid).order("entry_date", { ascending: false }).limit(500),
       supabase.from("income_statement_accounts").select("*").eq("company_id", cid).order("account_code"),
@@ -232,14 +233,14 @@ export default function Dashboard() {
   }
 
   function resetJournalForm() {
-    setShowForm(false); setEditingEntryId(null); setDescription(""); setEntryDate(today); setLines([]);
+    setShowForm(false); setEditingEntryId(null); setIsOpeningBalance(false); setDescription(""); setEntryDate(today); setLines([]);
   }
 
   async function saveJournal() {
     if (!supabase || !companyId || !periodId || !appUserId) {
       setNotice("لا توجد شركة أو فترة مالية مفتوحة. أكمل إعداد الشركة أولاً."); return;
     }
-    if (!description.trim() || lines.length < 2 || !balanced) {
+    if ((!isOpeningBalance && !description.trim()) || lines.length < 2 || !balanced) {
       setNotice("أدخل بيان القيد وسطرين على الأقل، وتأكد من تساوي المدين والدائن."); return;
     }
     const parsed = lines.map((line) => ({
@@ -254,12 +255,14 @@ export default function Dashboard() {
       setNotice("راجع الحسابات والمبالغ: يجب إدخال مبلغ في جهة واحدة فقط لكل سطر."); return;
     }
     setBusy(true); setNotice("");
-    const result = editingEntryId
-      ? await supabase.rpc("update_draft_journal_entry", { p_entry_id: editingEntryId, p_entry_date: entryDate, p_description: description.trim(), p_lines: parsed })
-      : await supabase.rpc("save_draft_journal_entry", { p_company_id: companyId, p_fiscal_period_id: periodId, p_entry_date: entryDate, p_description: description.trim(), p_lines: parsed });
+    const result = isOpeningBalance
+      ? await supabase.rpc("save_opening_balance_draft", { p_company_id: companyId, p_fiscal_period_id: periodId, p_lines: parsed })
+      : editingEntryId
+        ? await supabase.rpc("update_draft_journal_entry", { p_entry_id: editingEntryId, p_entry_date: entryDate, p_description: description.trim(), p_lines: parsed })
+        : await supabase.rpc("save_draft_journal_entry", { p_company_id: companyId, p_fiscal_period_id: periodId, p_entry_date: entryDate, p_description: description.trim(), p_lines: parsed });
     if (result.error) { setBusy(false); setNotice(result.error.message); return; }
     setBusy(false);
-    setNotice(editingEntryId ? "تم تحديث المسودة بنجاح." : "تم حفظ القيد كمسودة بنجاح.");
+    setNotice(isOpeningBalance ? "تم إنشاء مسودة الأرصدة الافتتاحية. راجعها ثم رحّلها." : editingEntryId ? "تم تحديث المسودة بنجاح." : "تم حفظ القيد كمسودة بنجاح.");
     resetJournalForm();
     await refreshWorkspace();
   }
@@ -373,8 +376,8 @@ export default function Dashboard() {
           <article className="panel quick-panel"><h2>ملخص الحسابات</h2><p>عدد الحسابات النشطة: <b>{accounts.length}</b></p><p>القيود الظاهرة: <b>{entries.length}</b></p><p>عملة الشركة: <b>ريال سعودي SAR</b></p><button className="primary-btn" onClick={() => { setActive("القيود اليومية"); setShowForm(true); }}>إنشاء قيد جديد</button></article>
         </section>}
         {active === "القيود اليومية" && <section className="panel">
-          <div className="panel-heading"><div><h2>دفتر القيود اليومية</h2><p>المسودات والقيود المرحلة</p></div><button className="primary-btn" onClick={() => { if (showForm) resetJournalForm(); else { setEditingEntryId(null); setSelectedEntry(null); setShowForm(true); } }}>＋ إنشاء قيد</button></div>
-          {showForm && <div className="journal-form"><div className="form-fields"><label>تاريخ القيد<input type="date" value={entryDate} onChange={(e) => setEntryDate(e.target.value)} /></label><label className="description-field">البيان<input value={description} onChange={(e) => setDescription(e.target.value)} placeholder="اكتب وصف القيد المحاسبي" /></label></div>
+          <div className="panel-heading"><div><h2>دفتر القيود اليومية</h2><p>المسودات والقيود المرحلة</p></div><div className="report-actions"><button className="secondary-btn" disabled={busy || entries.some((e)=>e.source_type==="opening_balance" && e.status!=="reversed")} onClick={()=>{resetJournalForm();setIsOpeningBalance(true);setDescription("الأرصدة الافتتاحية");setEntryDate(today);setLines([]);setShowForm(true);}}>إدخال الأرصدة الافتتاحية</button><button className="primary-btn" onClick={() => { if (showForm) resetJournalForm(); else { setEditingEntryId(null); setIsOpeningBalance(false); setSelectedEntry(null); setShowForm(true); } }}>＋ إنشاء قيد</button></div></div>
+          {showForm && <div className="journal-form"><div className="form-fields"><label>تاريخ القيد<input type="date" value={entryDate} disabled={isOpeningBalance} onChange={(e) => setEntryDate(e.target.value)} /></label><label className="description-field">البيان<input value={description} readOnly={isOpeningBalance} onChange={(e) => setDescription(e.target.value)} placeholder="اكتب وصف القيد المحاسبي" /></label></div>
             <div className="table-wrap"><table><thead><tr><th>الحساب</th><th>الطرف</th><th>مركز التكلفة</th><th>البيان</th><th>مدين SAR</th><th>دائن SAR</th><th></th></tr></thead><tbody>{lines.map((line,index) => <tr key={index}><td><select value={line.account_id} onChange={(e) => updateLine(index,"account_id",e.target.value)}>{accounts.filter((a) => a.is_posting).map((a) => <option key={a.id} value={a.id}>{a.code} — {a.name_ar}</option>)}</select></td><td><select value={line.party_id ?? ""} onChange={(e) => updateLine(index,"party_id",e.target.value)}><option value="">بدون طرف</option>{parties.filter((p:any)=>p.is_active).map((p:any)=><option key={p.id} value={p.id}>{p.code} — {p.name}</option>)}</select></td><td><select value={line.cost_center_id ?? ""} onChange={(e) => updateLine(index,"cost_center_id",e.target.value)}><option value="">بدون مركز</option>{costCenters.filter((c:any)=>c.is_active).map((c:any)=><option key={c.id} value={c.id}>{c.code} — {c.name_ar}</option>)}</select></td><td><input value={line.description} onChange={(e) => updateLine(index,"description",e.target.value)} placeholder="بيان السطر" /></td><td><input type="number" min="0" step="0.01" value={line.debit} onChange={(e) => updateLine(index,"debit",e.target.value)} /></td><td><input type="number" min="0" step="0.01" value={line.credit} onChange={(e) => updateLine(index,"credit",e.target.value)} /></td><td><button className="remove-line" onClick={() => setLines((v) => v.filter((_,i) => i !== index))}>×</button></td></tr>)}</tbody></table></div>
             <button className="add-line" onClick={() => setLines((v) => [...v,{account_id:accounts.find((a) => a.is_posting)?.id ?? "",debit:"0",credit:"0",description:"",party_id:null,cost_center_id:null}])}>＋ إضافة سطر</button>
             <div className="totals-row"><div><small>إجمالي المدين</small><b>{formatSAR(totals.debit)}</b></div><div><small>إجمالي الدائن</small><b>{formatSAR(totals.credit)}</b></div><div className={balanced ? "balance-ok" : "balance-warn"}><small>حالة التوازن</small><b>{balanced ? "متوازن ✓" : "غير متوازن"}</b></div></div>
