@@ -16,9 +16,9 @@ create index if not exists company_users_user_idx on company_users(user_id, comp
 create or replace function current_app_user_id()
 returns uuid
 language sql stable security definer
-set search_path = public
-as $$
-  select id from app_users
+set search_path = pg_catalog
+as $
+  select id from public.app_users
   where auth_subject = auth.uid()::text and is_active = true
   limit 1
 $$;
@@ -26,12 +26,12 @@ $$;
 create or replace function can_access_company(target_company_id uuid)
 returns boolean
 language sql stable security definer
-set search_path = public
-as $$
+set search_path = pg_catalog
+as $
   select exists (
-    select 1 from company_users cu
+    select 1 from public.company_users cu
     where cu.company_id = target_company_id
-      and cu.user_id = current_app_user_id()
+      and cu.user_id = public.current_app_user_id()
       and cu.is_active = true
   )
 $$;
