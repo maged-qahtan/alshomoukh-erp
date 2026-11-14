@@ -121,22 +121,24 @@ where e.status in ('posted', 'reversed');
 
 create or replace view trial_balance as
 select
-  e.company_id,
+  a.company_id,
   a.id as account_id,
   a.code as account_code,
   a.name_ar as account_name,
   a.type as account_type,
-  coalesce(sum(l.debit), 0)::numeric(20,2) as debit_total,
-  coalesce(sum(l.credit), 0)::numeric(20,2) as credit_total,
-  greatest(coalesce(sum(l.debit - l.credit), 0), 0)::numeric(20,2) as debit_balance,
-  greatest(coalesce(sum(l.credit - l.debit), 0), 0)::numeric(20,2) as credit_balance
+  coalesce(b.debit_total, 0)::numeric(20,2) as debit_total,
+  coalesce(b.credit_total, 0)::numeric(20,2) as credit_total,
+  greatest(coalesce(b.debit_total, 0) - coalesce(b.credit_total, 0), 0)::numeric(20,2) as debit_balance,
+  greatest(coalesce(b.credit_total, 0) - coalesce(b.debit_total, 0), 0)::numeric(20,2) as credit_balance
 from accounts a
-left join journal_lines l on l.account_id = a.id and l.company_id = a.company_id
-left join journal_entries e on e.id = l.journal_entry_id
-  and e.company_id = a.company_id and e.status in ('posted', 'reversed')
-where a.is_active = true
-group by e.company_id, a.id, a.company_id, a.code, a.name_ar, a.type;
-
+left join (
+  select l.company_id, l.account_id, sum(l.debit) as debit_total, sum(l.credit) as credit_total
+  from journal_lines l
+  join journal_entries e on e.id = l.journal_entry_id and e.company_id = l.company_id
+  where e.status in ('posted', 'reversed')
+  group by l.company_id, l.account_id
+) b on b.company_id = a.company_id and b.account_id = a.id
+where a.is_active = true;
 create or replace view income_statement_accounts as
 select
   e.company_id,
