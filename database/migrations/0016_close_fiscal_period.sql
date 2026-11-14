@@ -36,5 +36,5 @@ begin
     jsonb_build_object('status','closed','starts_on',v_period.starts_on,'ends_on',v_period.ends_on));
 end;
 $$;
-revoke all on function public.close_fiscal_period(uuid) from public;
+revoke all on function public.close_fiscal_period(uuid) from anon, public;
 grant execute on function public.close_fiscal_period(uuid) to authenticated;
