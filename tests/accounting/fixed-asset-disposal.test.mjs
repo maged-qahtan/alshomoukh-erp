@@ -23,8 +23,8 @@ test("asset disposal requires authorization, active asset and open fiscal period
 test("disposal closes asset cost and accumulated depreciation", () => {
   assert.match(migration, /code='1201'/i);
   assert.match(migration, /code='1202'/i);
-  assert.match(migration, /v_accumulated_account[\\s\\S]*debit/i);
-  assert.match(migration, /v_asset_account[\\s\\S]*a\\.acquisition_cost/i);
+  assert.match(migration, /v_accumulated_account[\s\\S]*debit/i);
+  assert.match(migration, /v_asset_account[\s\\S]*a\\.acquisition_cost/i);
 });
 
 test("disposal calculates balanced gain or loss and posts the journal", () => {
