@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState, type FormEvent } from "react";
 
 type Props = { supabase: any; companyId: string; appUserId: string | null };
-const tabs = ["الأصناف والمخزون", "المبيعات", "المشتريات", "الصندوق والبنوك", "المصروفات", "الأصول الثابتة"] as const;
+const tabs = ["الأصناف والمخزون", "العملاء والموردون", "المبيعات", "المشتريات", "الصندوق والبنوك", "المصروفات", "الأصول الثابتة"] as const;
 type Tab = typeof tabs[number];
 
 export default function Operations({ supabase, companyId, appUserId }: Props) {
@@ -19,6 +19,7 @@ export default function Operations({ supabase, companyId, appUserId }: Props) {
   const [assets, setAssets] = useState<any[]>([]);
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState("");
+  const [partyCode,setPartyCode]=useState(""); const [partyName,setPartyName]=useState(""); const [partyType,setPartyType]=useState("customer"); const [partyPhone,setPartyPhone]=useState(""); const [partyTax,setPartyTax]=useState("");
   const [sku, setSku] = useState(""); const [productName, setProductName] = useState("");
   const [barcode, setBarcode] = useState(""); const [unit, setUnit] = useState("حبة");
   const [purchasePrice, setPurchasePrice] = useState("0"); const [salePrice, setSalePrice] = useState("0");
@@ -71,6 +72,12 @@ export default function Operations({ supabase, companyId, appUserId }: Props) {
     if (!r.error) {setSku("");setProductName("");setBarcode("");}
     return r;
   },"تم حفظ الصنف.");
+  const saveParty = (e: FormEvent) => submit(e, async () => {
+    if(!partyCode.trim()||!partyName.trim()) throw new Error("رمز العميل/المورد واسمه مطلوبان.");
+    const r=await supabase.from("parties").insert({company_id:companyId,code:partyCode.trim(),name:partyName.trim(),party_type:partyType,phone:partyPhone.trim()||null,tax_number:partyTax.trim()||null});
+    if(!r.error){setPartyCode("");setPartyName("");setPartyPhone("");setPartyTax("");}
+    return r;
+  },"تم حفظ العميل/المورد.");
   const saveWarehouse = (e: FormEvent) => submit(e, async () => {
     const r=await supabase.from("warehouses").insert({company_id:companyId,code:warehouseCode.trim(),name_ar:warehouseName.trim()});
     if(!r.error){setWarehouseCode("");setWarehouseName("");} return r;
@@ -116,10 +123,14 @@ export default function Operations({ supabase, companyId, appUserId }: Props) {
   const [customers,setCustomers]=useState<any[]>([]); const [suppliers,setSuppliers]=useState<any[]>([]);
   useEffect(()=>{void Promise.all([parties("customer"),parties("supplier")]).then(([c,s])=>{setCustomers(c);setSuppliers(s);});},[companyId]);
 
+  const [allParties,setAllParties]=useState<any[]>([]);
+  useEffect(()=>{void supabase.from("parties").select("id,code,name,party_type,phone,tax_number,is_active").eq("company_id",companyId).order("code").then((r:any)=>{if(!r.error)setAllParties(r.data??[]);});},[supabase,companyId,customers.length,suppliers.length]);
+
   return <section className="panel">
     <div className="panel-heading"><div><h2>إدارة العمليات</h2><p>المخزون والفواتير والنقدية والمصروفات والأصول</p></div></div>
     <div className="ops-tabs">{tabs.map(t=><button key={t} className={tab===t?"primary-btn":"secondary-btn"} onClick={()=>setTab(t)}>{t}</button>)}</div>
     {notice&&<p className="notice">{notice}</p>}
+    {tab==="العملاء والموردون"&&<><h3>إضافة عميل أو مورد</h3><form className="journal-form" onSubmit={saveParty}><div className="form-fields"><label>الرمز<input required value={partyCode} onChange={e=>setPartyCode(e.target.value)}/></label><label>الاسم<input required value={partyName} onChange={e=>setPartyName(e.target.value)}/></label><label>النوع<select value={partyType} onChange={e=>setPartyType(e.target.value)}><option value="customer">عميل</option><option value="supplier">مورد</option><option value="both">عميل ومورد</option></select></label><label>الهاتف<input value={partyPhone} onChange={e=>setPartyPhone(e.target.value)}/></label><label>الرقم الضريبي<input value={partyTax} onChange={e=>setPartyTax(e.target.value)}/></label></div><button className="primary-btn" disabled={busy}>حفظ</button></form><h3>دليل العملاء والموردين ({allParties.length})</h3><div className="table-wrap"><table><thead><tr><th>الرمز</th><th>الاسم</th><th>النوع</th><th>الهاتف</th><th>الرقم الضريبي</th><th>الحالة</th></tr></thead><tbody>{allParties.map(p=><tr key={p.id}><td>{p.code}</td><td>{p.name}</td><td>{p.party_type==="customer"?"عميل":p.party_type==="supplier"?"مورد":"عميل ومورد"}</td><td>{p.phone||"—"}</td><td>{p.tax_number||"—"}</td><td>{p.is_active?"نشط":"موقوف"}</td></tr>)}</tbody></table></div></>}
     {tab==="الأصناف والمخزون"&&<>
       <h3>إضافة صنف</h3><form className="journal-form" onSubmit={saveProduct}><div className="form-fields">
         <label>رمز الصنف<input required value={sku} onChange={e=>setSku(e.target.value)}/></label><label>اسم الصنف<input required value={productName} onChange={e=>setProductName(e.target.value)}/></label><label>الباركود<input value={barcode} onChange={e=>setBarcode(e.target.value)}/></label><label>الوحدة<input value={unit} onChange={e=>setUnit(e.target.value)}/></label>
