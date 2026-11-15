@@ -53,7 +53,7 @@ export default function Operations({ supabase, companyId, appUserId }: Props) {
       supabase.from("purchase_invoices").select("id,invoice_number,invoice_date,grand_total,status,journal_entry_id").eq("company_id",companyId).order("invoice_date",{ascending:false}).limit(50),
       supabase.from("cash_accounts").select("id,code,name_ar,account_type,opening_balance,ledger_account_id,currency_code,is_active").eq("company_id",companyId).order("code"),
       supabase.from("accounts").select("id,code,name_ar,is_active,is_posting").eq("company_id",companyId).eq("is_active",true).eq("is_posting",true).order("code"),
-      supabase.from("cash_transactions").select("id,cash_account_id,transaction_date,transaction_type,amount,description,status,journal_entry_id").eq("company_id",companyId).order("transaction_date",{ascending:false}).limit(50),
+      supabase.from("cash_transactions").select("id,cash_account_id,transfer_counter_account_id,transaction_date,transaction_type,amount,description,status,journal_entry_id").eq("company_id",companyId).order("transaction_date",{ascending:false}).limit(50),
       supabase.from("expenses").select("id,expense_number,expense_date,category,description,amount,vat_amount,status,journal_entry_id,expense_account_id,cash_account_id,cost_center_id").eq("company_id",companyId).order("expense_date",{ascending:false}).limit(50),
       supabase.from("fixed_assets").select("id,asset_code,name_ar,acquisition_date,acquisition_cost,useful_life_months,residual_value,is_active").eq("company_id",companyId).order("asset_code"),
       supabase.from("fixed_asset_balances").select("asset_id,accumulated_depreciation,net_book_value").eq("company_id",companyId),
@@ -162,16 +162,17 @@ export default function Operations({ supabase, companyId, appUserId }: Props) {
     if(String(source.currency_code||"").trim()!==String(destination.currency_code||"").trim()) throw new Error("التحويل الداخلي يتطلب تطابق عملة الحسابين.");
     if(!source.ledger_account_id||!destination.ledger_account_id||source.ledger_account_id===destination.ledger_account_id) throw new Error("يجب ربط الحسابين بحسابين محاسبيين مختلفين.");
     if(!Number.isFinite(amount)||amount<=0||!transferDescription.trim()) throw new Error("أدخل مبلغاً موجباً وبياناً واضحاً للتحويل.");
-    const r=await supabase.from("cash_transactions").insert({company_id:companyId,cash_account_id:source.id,transaction_type:"transfer_out",transaction_date:transferDate,amount,description:transferDescription.trim(),reference:transferReference.trim()||null,status:"draft",created_by:appUserId});
+    const r=await supabase.from("cash_transactions").insert({company_id:companyId,cash_account_id:source.id,transaction_type:"transfer_out",transaction_date:transferDate,amount,description:transferDescription.trim(),reference:transferReference.trim()||null,transfer_counter_account_id:destination.id,status:"draft",created_by:appUserId});
     if(!r.error){setTransferAmount("");setTransferDescription("");setTransferReference("");}
     return r;
   },"تم حفظ مسودة التحويل. لم تتغير أرصدة الحسابات بعد.");
   async function postCashTransfer(id:string){
     const row=cashTransactions.find(x=>x.id===id);
     if(!row||row.transaction_type!=="transfer_out"||row.status!=="draft"){setNotice("اختر مسودة تحويل صادر صالحة.");return;}
-    if(!transferSource||row.cash_account_id!==transferSource){setNotice("اختر الحساب المصدر المطابق لمسودة التحويل.");return;}
-    if(!transferDestination){setNotice("اختر حساب الوجهة في نموذج التحويل أولاً.");return;}
-    const destination=transferDestination;
+    const source=cashAccounts.find(a=>a.id===row.cash_account_id&&a.is_active);
+    const destination=cashAccounts.find(a=>a.id===row.transfer_counter_account_id&&a.is_active);
+    if(!source||!destination){setNotice("حساب المصدر أو الوجهة في مسودة التحويل غير نشط أو غير موجود.");return;}
+    if(source.currency_code!==destination.currency_code||!source.ledger_account_id||!destination.ledger_account_id||source.ledger_account_id===destination.ledger_account_id){setNotice("بيانات حسابات التحويل غير متوافقة؛ راجع الحسابات والعملة والربط المحاسبي.");return;}
     if(!window.confirm("سيتم إنشاء حركة واردة ومقابلة وقيد محاسبي متوازن في عملية ذرية واحدة. هل تريد المتابعة؟"))return;
     setBusy(true);setNotice("");
     try{const r=await supabase.rpc("post_cash_transfer",{p_source_transaction_id:id,p_destination_cash_account_id:destination});if(r.error)throw r.error;setNotice("تم ترحيل التحويل بين الحسابين وإنشاء القيد المحاسبي.");await refresh();}
