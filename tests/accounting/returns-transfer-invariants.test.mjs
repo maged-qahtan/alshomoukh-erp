@@ -20,14 +20,18 @@ test("cash transfer locks both company accounts in deterministic order", async (
   assert.match(sql, /source_ca\.ledger_account_id = destination_ca\.ledger_account_id/i);
 });
 
-test("sales return serializes stock reads before checking returned stock", async () => {
-  const sql = await read("0024_atomic_sales_purchase_returns.sql");
-  const fn = sql.slice(sql.indexOf("create or replace function public.post_sales_return"), sql.indexOf("create or replace function public.post_purchase_return"));
-  const lock = fn.indexOf("perform pg_advisory_xact_lock");
-  const journalWrite = fn.indexOf("insert into public.journal_entries");
-  const stockWrite = fn.indexOf("insert into public.stock_movements");
+test("sales-return posting acquires the stock lock before journal and stock writes", async () => {
+  const sql = await read("0032_serialize_sales_return_stock_writes.sql");
+  const lock = sql.indexOf("perform pg_advisory_xact_lock");
+  const journalWrite = sql.indexOf("insert into public.journal_entries");
+  const stockWrite = sql.indexOf("insert into public.stock_movements");
   assert.ok(lock >= 0 && journalWrite > lock && stockWrite > journalWrite);
-  assert.doesNotMatch(fn, /from public\\.stock_on_hand/i);
+  assert.doesNotMatch(sql, /from public\.stock_on_hand/i);
+  assert.match(sql, /auth\.uid\(\) is null/i);
+  assert.match(sql, /public\.current_app_user_id\(\)/i);
+  assert.match(sql, /where id=r\.id and status='draft'/i);
+  assert.match(sql, /revoke all on function public\.post_sales_return\(uuid\) from public,anon/i);
+  assert.match(sql, /grant execute on function public\.post_sales_return\(uuid\) to authenticated/i);
 });
 
 test("sales and purchase return drafts prevent cumulative quantity above original invoice line", async () => {
