@@ -106,9 +106,8 @@ begin
   end loop;
 
   perform pg_advisory_xact_lock(hashtextextended(v_invoice.company_id::text,0));
-  select coalesce(max(entry_number),0)+1 into v_entry_no from public.journal_entries where company_id=v_invoice.company_id;
-  insert into public.journal_entries(company_id,fiscal_period_id,entry_number,entry_date,description,reference,source_type,source_id,created_by)
-  values(v_invoice.company_id,v_period_id,v_entry_no,v_invoice.invoice_date,'ترحيل فاتورة مبيعات '||v_invoice.invoice_number,
+  insert into public.journal_entries(company_id,fiscal_period_id,entry_date,description,reference,source_type,source_id,created_by)
+  values(v_invoice.company_id,v_period_id,v_invoice.invoice_date,'ترحيل فاتورة مبيعات '||v_invoice.invoice_number,
     v_invoice.invoice_number,'sales_invoice',p_invoice_id,v_user_id)
   returning id into v_journal_id;
 
@@ -213,9 +212,8 @@ begin
   end if;
 
   perform pg_advisory_xact_lock(hashtextextended(v_invoice.company_id::text,0));
-  select coalesce(max(entry_number),0)+1 into v_entry_no from public.journal_entries where company_id=v_invoice.company_id;
-  insert into public.journal_entries(company_id,fiscal_period_id,entry_number,entry_date,description,reference,source_type,source_id,created_by)
-  values(v_invoice.company_id,v_period_id,v_entry_no,v_invoice.invoice_date,'ترحيل فاتورة مشتريات '||v_invoice.invoice_number,
+  insert into public.journal_entries(company_id,fiscal_period_id,entry_date,description,reference,source_type,source_id,created_by)
+  values(v_invoice.company_id,v_period_id,v_invoice.invoice_date,'ترحيل فاتورة مشتريات '||v_invoice.invoice_number,
     v_invoice.invoice_number,'purchase_invoice',p_invoice_id,v_user_id)
   returning id into v_journal_id;
 
