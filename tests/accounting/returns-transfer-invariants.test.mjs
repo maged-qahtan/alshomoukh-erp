@@ -27,6 +27,7 @@ test("sales-return posting acquires the stock lock before journal and stock writ
   const stockWrite = sql.indexOf("insert into public.stock_movements");
   assert.ok(lock >= 0 && journalWrite > lock && stockWrite > journalWrite);
   assert.doesNotMatch(sql, /from public\.stock_on_hand/i);
+  assert.match(sql, /security invoker/i);
   assert.match(sql, /auth\.uid\(\) is null/i);
   assert.match(sql, /public\.current_app_user_id\(\)/i);
   assert.match(sql, /where id=r\.id and status='draft'/i);
@@ -58,4 +59,19 @@ test("return posting functions create balanced debit and credit totals through j
   assert.match(sql, /r\.subtotal/);
   assert.match(sql, /r\.vat_total/);
   assert.match(sql, /quantity_in,quantity_out/);
+});
+
+test("sales, purchase and return posting share one company stock advisory lock", async () => {
+  const files = await Promise.all([
+    read("0027_serialize_sales_stock_availability_check.sql"),
+    read("0029_harden_purchase_return_posting.sql"),
+    read("0032_serialize_sales_return_stock_writes.sql")
+  ]);
+  const lock = "pg_advisory_xact_lock(hashtextextended(";
+  for (const sql of files) {
+    assert.ok(sql.includes(lock), "each stock writer must use the shared company advisory lock");
+    assert.match(sql, /hashtextextended\([^,]+::text,\s*0\)/i);
+  }
+  const expressions = files.map(sql => sql.match(/pg_advisory_xact_lock\(hashtextextended\([^;]+?\)\)/i)?.[0]);
+  assert.equal(new Set(expressions).size, 1, "stock writers must use an identical advisory-lock key");
 });
