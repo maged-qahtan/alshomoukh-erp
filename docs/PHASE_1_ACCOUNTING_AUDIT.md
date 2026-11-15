@@ -20,9 +20,9 @@ In migration `0022_atomic_invoice_posting_stock_accounting.sql`, `post_sales_inv
 ### P0 — Migration history and deployment reproducibility
 
 - Multiple migration files share the same numeric version prefix: `0014`, `0015`, `0016`, `0017`, `0018`, and `0019`. This is incompatible with migration runners that require a unique version per migration. Confirm the actual Supabase migration history before renaming or consolidating anything; do not rename already-applied migrations blindly.
-- The migration set has a gap at `0024`. Confirm whether this is intentional or a removed migration that is still present in the remote migration history.
+- The repository tree has no `0024` migration file, but the linked Supabase project's remote history contains an applied migration named `0024_atomic_sales_purchase_returns`. Recover and verify the exact source migration before attempting a fresh environment rebuild; do not fabricate a replacement from the remote name alone.
 - `database/README.md` describes only the first three migrations and therefore is not a reliable deployment guide for the current schema.
-- The repository has no test script in `package.json`; current CI runs `npm install`, `npm run typecheck`, and `npm run build`, but no SQL integration, accounting invariant, RLS, or concurrency tests.
+- A Node test script and 10 journal-validation unit tests have now been added. CI run #135 passed `npm install`, `npm run test`, `npm run typecheck`, and `npm run build`. SQL integration, RLS, and concurrency tests are still outstanding.
 
 ### P1 — Operational accounting completeness
 
@@ -49,20 +49,20 @@ In migration `0022_atomic_invoice_posting_stock_accounting.sql`, `post_sales_inv
 
 ## Recommended execution order
 
-1. Confirm remote Supabase migration history and staging/production environment boundaries.
+1. Remote Supabase migration history and environment boundaries have been inspected read-only. The linked project currently records migrations through `0026_expense_accounting_posting`; migrations 0027 and 0028 are not applied. The remote history includes 0024 although its source file is absent from this repository.
 2. Apply the sales stock-lock migration to a disposable staging database and run concurrent sales/purchase tests.
 3. Add a database test harness for posting, reversal, period closing, year-end carry-forward, RLS, and report invariants.
-4. Resolve migration version uniqueness based on the actual remote migration history; update the deployment guide.
-5. Add atomic cash/bank transfers and immutable posted sales/purchase documents.
+4. Resolve migration version uniqueness and recover the missing 0024 source based on the actual remote migration history; update the deployment guide.
+5. Apply and verify the atomic cash/bank transfer migration in staging, then add the UI workflow. The migration is drafted in `0028_atomic_cash_bank_transfers.sql`; it has not been applied.
 6. Complete fixed-asset depreciation and returns accounting.
 7. Reconcile all financial reports to controlled test ledgers before production approval.
 
 ## Validation status
 
 - Source review: completed for the listed baseline files.
-- TypeScript/Next.js CI for the proposed PR: not yet observed.
-- SQL syntax/integration tests: not run.
+- TypeScript/Next.js CI: run #135 passed all four steps; later CI runs for the newest commits are pending at the time of this update.
+- SQL syntax/integration tests: not run against PostgreSQL.
 - Staging concurrency tests: not run.
-- Remote Supabase migration state: not inspected.
-- Production database: unchanged.
+- Remote Supabase migration state: inspected read-only; current history ends at 0026.
+- Production database: unchanged; no migrations applied.
 - Production deployment: unchanged.
