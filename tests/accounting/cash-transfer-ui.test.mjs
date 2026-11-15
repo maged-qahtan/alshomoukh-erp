@@ -29,3 +29,9 @@ test("cash transfer posting does not use free-text destination prompts", () => {
   assert.doesNotMatch(ui, /window\.prompt\(/i);
   assert.match(ui, /اختر حساب الوجهة في نموذج التحويل أولاً/i);
 });
+
+test("cash transfer UI persists destination and posts using the saved draft value", () => {
+  assert.match(ui, /transfer_counter_account_id:destination\.id/i);
+  assert.match(ui, /row\.transfer_counter_account_id/i);
+  assert.match(ui, /select\("id,cash_account_id,transfer_counter_account_id,/i);
+});
