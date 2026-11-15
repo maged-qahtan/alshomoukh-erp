@@ -82,20 +82,28 @@ export default function Operations({ supabase, companyId, appUserId }: Props) {
     if(!r.error){setMovementQty("");setMovementCost("");setBatch("");setExpiry("");} return r;
   },"تم تسجيل حركة المخزون. راجع أثرها على الرصيد.");
   const saveInvoice = (kind: "sales"|"purchase") => (e: FormEvent) => submit(e, async () => {
-    const product=products.find(p=>p.id===invoiceProduct); const qty=Number(invoiceQty); const price=Number(invoicePrice); const rate=Number(invoiceVat);
-    if(!invoiceNo.trim()||!product||qty<=0||price<0) throw new Error("أكمل رقم الفاتورة والصنف والكمية والسعر.");
+    const product=products.find(p=>p.id===invoiceProduct);
+    const qty=Number(invoiceQty); const price=Number(invoicePrice); const rate=Number(invoiceVat);
+    if(!invoiceNo.trim()||!product||!Number.isFinite(qty)||qty<=0||!Number.isFinite(price)||price<0||!Number.isFinite(rate)||rate<0||rate>100)
+      throw new Error("أكمل رقم الفاتورة والصنف والكمية والسعر ونسبة الضريبة بشكل صحيح.");
     if(kind==="purchase"&&!invoiceWarehouse) throw new Error("اختر المستودع لفاتورة الشراء.");
-    const base=Math.round(qty*price*100)/100; const tax=Math.round(base*rate)/100; const total=base+tax;
-    const header=kind==="sales"
-      ? await supabase.from("sales_invoices").insert({company_id:companyId,invoice_number:invoiceNo.trim(),invoice_date:invoiceDate,customer_id:invoiceParty||null,subtotal:base,vat_total:tax,grand_total:total,created_by:appUserId}).select("id").single()
-      : await supabase.from("purchase_invoices").insert({company_id:companyId,invoice_number:invoiceNo.trim(),invoice_date:invoiceDate,supplier_id:invoiceParty||null,warehouse_id:invoiceWarehouse,subtotal:base,vat_total:tax,grand_total:total,created_by:appUserId}).select("id").single();
-    if(header.error) return header;
-    const line=kind==="sales"
-      ? await supabase.from("sales_invoice_lines").insert({company_id:companyId,invoice_id:header.data.id,product_id:product.id,quantity:qty,unit_price:price,vat_rate:rate,line_total:total})
-      : await supabase.from("purchase_invoice_lines").insert({company_id:companyId,invoice_id:header.data.id,product_id:product.id,quantity:qty,unit_cost:price,vat_rate:rate,line_total:total});
-    if(!line.error){setInvoiceNo("");setInvoiceQty("1");}
-    return line;
-  },kind==="sales"?"تم حفظ مسودة فاتورة البيع. لم يتم ترحيلها محاسبياً.":"تم حفظ مسودة فاتورة الشراء. لم يتم ترحيلها محاسبياً.");
+
+    const rpcName=kind==="sales"?"create_sales_invoice_draft":"create_purchase_invoice_draft";
+    const common={
+      p_company_id:companyId,
+      p_invoice_number:invoiceNo.trim(),
+      p_invoice_date:invoiceDate,
+      p_product_id:product.id,
+      p_quantity:qty,
+      p_vat_rate:rate,
+    };
+    const params=kind==="sales"
+      ? {...common,p_customer_id:invoiceParty||null,p_unit_price:price}
+      : {...common,p_supplier_id:invoiceParty||null,p_warehouse_id:invoiceWarehouse,p_unit_cost:price};
+    const result=await supabase.rpc(rpcName,params);
+    if(!result.error){setInvoiceNo("");setInvoiceQty("1");}
+    return result;
+  },kind==="sales"?"تم حفظ مسودة فاتورة البيع مع تفاصيلها ذرياً. لم يتم ترحيلها محاسبياً.":"تم حفظ مسودة فاتورة الشراء مع تفاصيلها ذرياً. لم يتم ترحيلها محاسبياً.");
   const saveCashAccount = (e: FormEvent) => submit(e, async()=>{const r=await supabase.from("cash_accounts").insert({company_id:companyId,code:cashCode.trim(),name_ar:cashName.trim(),account_type:cashType});if(!r.error){setCashCode("");setCashName("");}return r;},"تم حفظ حساب الصندوق/البنك.");
   const saveCashTransaction = (e: FormEvent) => submit(e,async()=>{if(!cashAccount||Number(cashAmount)<=0)throw new Error("اختر الحساب وأدخل مبلغاً صحيحاً.");const r=await supabase.from("cash_transactions").insert({company_id:companyId,cash_account_id:cashAccount,transaction_type:cashKind,amount:Number(cashAmount),description:cashDescription.trim(),status:"draft",created_by:appUserId});if(!r.error){setCashAmount("");setCashDescription("");}return r;},"تم حفظ مسودة حركة الصندوق.");
   const saveExpense = (e: FormEvent) => submit(e,async()=>{const r=await supabase.from("expenses").insert({company_id:companyId,expense_number:expenseNo.trim(),category:expenseCategory.trim(),description:expenseDescription.trim(),amount:Number(expenseAmount),status:"draft",created_by:appUserId});if(!r.error){setExpenseNo("");setExpenseCategory("");setExpenseDescription("");setExpenseAmount("");}return r;},"تم حفظ المصروف كمسودة.");
