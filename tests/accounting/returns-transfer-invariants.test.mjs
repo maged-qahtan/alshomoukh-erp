@@ -72,6 +72,10 @@ test("sales, purchase and return posting share one company stock advisory lock",
     assert.ok(sql.includes(lock), "each stock writer must use the shared company advisory lock");
     assert.match(sql, /hashtextextended\([^,]+::text,\s*0\)/i);
   }
-  const expressions = files.map(sql => sql.match(/pg_advisory_xact_lock\(hashtextextended\([^;]+?\)\)/i)?.[0]);
+  const expressions = files.map(sql => {
+    const match = sql.match(/pg_advisory_xact_lock\(hashtextextended\((\w+)\.company_id::text,\s*0\)\)/i);
+    assert.ok(match, "company advisory lock must be keyed by company_id");
+    return match[0].replace(match[1] + ".company_id", "<company_id>");
+  });
   assert.equal(new Set(expressions).size, 1, "stock writers must use an identical advisory-lock key");
 });
