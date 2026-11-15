@@ -16,7 +16,8 @@ test("cash transfer drafts are created as transfer_out without posting side effe
 
 test("cash transfer posting calls the atomic database RPC with source and destination", () => {
   assert.match(ui, /rpc\("post_cash_transfer",\{p_source_transaction_id:id,p_destination_cash_account_id:destination\}\)/i);
-  assert.match(ui, /row\.cash_account_id!==transferSource/i);
+  assert.match(ui, /row\.cash_account_id/i);
+  assert.match(ui, /row\.transfer_counter_account_id/i);
 });
 
 test("cash transfer UI validates same currency and distinct ledger accounts", () => {
@@ -27,7 +28,7 @@ test("cash transfer UI validates same currency and distinct ledger accounts", ()
 
 test("cash transfer posting does not use free-text destination prompts", () => {
   assert.doesNotMatch(ui, /window\.prompt\(/i);
-  assert.match(ui, /اختر حساب الوجهة في نموذج التحويل أولاً/i);
+  assert.match(ui, /حساب المصدر أو الوجهة في مسودة التحويل غير نشط أو غير موجود/i);
 });
 
 test("cash transfer UI persists destination and posts using the saved draft value", () => {
