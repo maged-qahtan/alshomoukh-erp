@@ -6,6 +6,7 @@ begin;
 create or replace function public.post_sales_return(p_return_id uuid)
 returns uuid
 language plpgsql
+security invoker
 set search_path = pg_catalog, public, auth
 as $function$
 declare
