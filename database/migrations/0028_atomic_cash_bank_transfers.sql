@@ -33,6 +33,28 @@ create unique index if not exists cash_transactions_transfer_group_account_uidx
   on public.cash_transactions(transfer_group_id, cash_account_id)
   where transfer_group_id is not null;
 
+-- Posted cash/bank movements are immutable; corrections must use a documented reversal.
+create or replace function public.guard_posted_cash_transaction_immutable()
+returns trigger
+language plpgsql
+set search_path = pg_catalog, public
+as $
+begin
+  if old.status = 'posted' then
+    raise exception 'Posted cash transactions are immutable; create a documented reversal instead';
+  end if;
+  if tg_op = 'DELETE' then
+    return old;
+  end if;
+  return new;
+end;
+$;
+
+drop trigger if exists cash_transactions_posted_immutable on public.cash_transactions;
+create trigger cash_transactions_posted_immutable
+before update or delete on public.cash_transactions
+for each row execute function public.guard_posted_cash_transaction_immutable();
+
 create or replace function public.post_cash_transfer(
   p_source_transaction_id uuid,
   p_destination_cash_account_id uuid
