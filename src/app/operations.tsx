@@ -42,7 +42,7 @@ export default function Operations({ supabase, companyId, appUserId }: Props) {
       supabase.from("products").select("id,sku,barcode,name_ar,unit,purchase_price,sale_price,vat_rate,min_stock,is_active").eq("company_id",companyId).order("sku"),
       supabase.from("warehouses").select("id,code,name_ar,is_active").eq("company_id",companyId).order("code"),
       supabase.from("stock_on_hand").select("*").eq("company_id",companyId).order("product_name"),
-      supabase.from("sales_invoices").select("id,invoice_number,invoice_date,grand_total,status").eq("company_id",companyId).order("invoice_date",{ascending:false}).limit(50),
+      supabase.from("sales_invoices").select("id,invoice_number,invoice_date,grand_total,status,journal_entry_id").eq("company_id",companyId).order("invoice_date",{ascending:false}).limit(50),
       supabase.from("purchase_invoices").select("id,invoice_number,invoice_date,grand_total,status").eq("company_id",companyId).order("invoice_date",{ascending:false}).limit(50),
       supabase.from("cash_accounts").select("id,code,name_ar,account_type,opening_balance").eq("company_id",companyId).order("code"),
       supabase.from("cash_transactions").select("id,transaction_date,transaction_type,amount,description,status").eq("company_id",companyId).order("transaction_date",{ascending:false}).limit(50),
@@ -64,6 +64,19 @@ export default function Operations({ supabase, companyId, appUserId }: Props) {
       if (result?.error) throw result.error;
       setNotice(success); await refresh();
     } catch (e: any) { setNotice(e?.message ?? "تعذر إتمام العملية."); }
+    finally { setBusy(false); }
+  }
+
+  async function postInvoice(kind: "sales"|"purchase", invoiceId: string) {
+    if (!window.confirm("سيتم ترحيل الفاتورة وإنشاء القيد المحاسبي وحركة المخزون، ولا يمكن تعديلها بعد الترحيل. هل تريد المتابعة؟")) return;
+    setBusy(true); setNotice("");
+    try {
+      const rpc=kind==="sales"?"post_sales_invoice":"post_purchase_invoice";
+      const result=await supabase.rpc(rpc,{p_invoice_id:invoiceId});
+      if(result.error) throw result.error;
+      setNotice("تم ترحيل الفاتورة وإنشاء القيد وحركة المخزون بنجاح.");
+      await refresh();
+    } catch(e:any) { setNotice(e?.message??"تعذر ترحيل الفاتورة."); }
     finally { setBusy(false); }
   }
   const saveProduct = (e: FormEvent) => submit(e, async () => {
@@ -146,7 +159,7 @@ export default function Operations({ supabase, companyId, appUserId }: Props) {
       <h3>الأرصدة الحالية</h3><div className="table-wrap"><table><thead><tr><th>الصنف</th><th>المستودع</th><th>الكمية</th><th>متوسط التكلفة</th></tr></thead><tbody>{stock.map((r,i)=><tr key={i}><td>{r.sku} — {r.product_name}</td><td>{r.warehouse_name}</td><td>{r.quantity_on_hand}</td><td>{Number(r.weighted_unit_cost||0).toFixed(4)}</td></tr>)}</tbody></table></div>
       <h3>الأصناف المسجلة ({products.length})</h3><div className="table-wrap"><table><thead><tr><th>الرمز</th><th>الاسم</th><th>باركود</th><th>شراء</th><th>بيع</th></tr></thead><tbody>{products.map(p=><tr key={p.id}><td>{p.sku}</td><td>{p.name_ar}</td><td>{p.barcode||"—"}</td><td>{p.purchase_price}</td><td>{p.sale_price}</td></tr>)}</tbody></table></div>
     </>}
-    {(tab==="المبيعات"||tab==="المشتريات")&&<><h3>{tab==="المبيعات"?"إنشاء مسودة فاتورة بيع":"إنشاء مسودة فاتورة شراء"}</h3><p className="notice">الفاتورة تحفظ كمسودة فقط. الترحيل المحاسبي وحركة المخزون الآلية وربط ZATCA لم تُفعّل بعد.</p>
+    {(tab==="المبيعات"||tab==="المشتريات")&&<><h3>{tab==="المبيعات"?"إنشاء مسودة فاتورة بيع":"إنشاء مسودة فاتورة شراء"}</h3><p className="notice">احفظ الفاتورة كمسودة ثم راجعها واضغط «ترحيل» لإنشاء القيد المحاسبي وحركة المخزون آلياً. ربط ZATCA غير مفعّل.</p>
       <form className="journal-form" onSubmit={saveInvoice(tab==="المبيعات"?"sales":"purchase")}><div className="form-fields">
         <label>رقم الفاتورة<input required value={invoiceNo} onChange={e=>setInvoiceNo(e.target.value)}/></label><label>التاريخ<input type="date" value={invoiceDate} onChange={e=>setInvoiceDate(e.target.value)}/></label>
         <label>{tab==="المبيعات"?"العميل":"المورد"}<select value={invoiceParty} onChange={e=>setInvoiceParty(e.target.value)}><option value="">نقدي / غير محدد</option>{(tab==="المبيعات"?customers:suppliers).map(p=><option key={p.id} value={p.id}>{p.name}</option>)}</select></label>
@@ -154,7 +167,7 @@ export default function Operations({ supabase, companyId, appUserId }: Props) {
         <label>الصنف<select required value={invoiceProduct} onChange={e=>{setInvoiceProduct(e.target.value);const p=products.find(x=>x.id===e.target.value);if(p){setInvoicePrice(String(tab==="المبيعات"?p.sale_price:p.purchase_price));setInvoiceVat(String(p.vat_rate));}}}><option value="">اختر الصنف</option>{products.map(p=><option key={p.id} value={p.id}>{p.sku} — {p.name_ar}</option>)}</select></label>
         <label>الكمية<input required type="number" min="0.001" step="0.001" value={invoiceQty} onChange={e=>setInvoiceQty(e.target.value)}/></label><label>سعر الوحدة<input required type="number" min="0" step="0.0001" value={invoicePrice} onChange={e=>setInvoicePrice(e.target.value)}/></label><label>الضريبة %<input type="number" min="0" max="100" step="0.01" value={invoiceVat} onChange={e=>setInvoiceVat(e.target.value)}/></label>
       </div><button className="primary-btn" disabled={busy}>حفظ مسودة الفاتورة</button></form>
-      <h3>الفواتير المحفوظة</h3><div className="table-wrap"><table><thead><tr><th>رقم الفاتورة</th><th>التاريخ</th><th>الإجمالي</th><th>الحالة</th></tr></thead><tbody>{(tab==="المبيعات"?sales:purchases).map(r=><tr key={r.id}><td>{r.invoice_number}</td><td>{r.invoice_date}</td><td>{Number(r.grand_total).toFixed(2)}</td><td>{r.status==="posted"?"مرحّلة":r.status==="cancelled"?"ملغاة":"مسودة"}</td></tr>)}</tbody></table></div>
+      <h3>الفواتير المحفوظة</h3><div className="table-wrap"><table><thead><tr><th>رقم الفاتورة</th><th>التاريخ</th><th>الإجمالي</th><th>الحالة</th><th>القيد المرتبط</th><th>الإجراء</th></tr></thead><tbody>{(tab==="المبيعات"?sales:purchases).map(r=><tr key={r.id}><td>{r.invoice_number}</td><td>{r.invoice_date}</td><td>{Number(r.grand_total).toFixed(2)}</td><td>{r.status==="posted"?"مرحّلة":r.status==="cancelled"?"ملغاة":"مسودة"}</td><td>{r.journal_entry_id||"—"}</td><td>{r.status==="draft"?<button type="button" className="primary-btn" disabled={busy} onClick={()=>void postInvoice(tab==="المبيعات"?"sales":"purchase",r.id)}>ترحيل</button>:"—"}</td></tr>)}</tbody></table></div>
     </>}
     {tab==="الصندوق والبنوك"&&<><h3>إضافة صندوق أو حساب بنكي</h3><form className="journal-form" onSubmit={saveCashAccount}><div className="form-fields"><label>الرمز<input required value={cashCode} onChange={e=>setCashCode(e.target.value)}/></label><label>الاسم<input required value={cashName} onChange={e=>setCashName(e.target.value)}/></label><label>النوع<select value={cashType} onChange={e=>setCashType(e.target.value)}><option value="cash">صندوق</option><option value="bank">بنك</option></select></label></div><button className="primary-btn" disabled={busy}>حفظ الحساب</button></form>
       <h3>حركة قبض أو صرف (مسودة)</h3><form className="journal-form" onSubmit={saveCashTransaction}><div className="form-fields"><label>الحساب<select required value={cashAccount} onChange={e=>setCashAccount(e.target.value)}><option value="">اختر الحساب</option>{cashAccounts.map(a=><option key={a.id} value={a.id}>{a.code} — {a.name_ar}</option>)}</select></label><label>النوع<select value={cashKind} onChange={e=>setCashKind(e.target.value)}><option value="receipt">قبض</option><option value="payment">صرف</option></select></label><label>المبلغ<input required type="number" min="0.01" step="0.01" value={cashAmount} onChange={e=>setCashAmount(e.target.value)}/></label><label>البيان<input required value={cashDescription} onChange={e=>setCashDescription(e.target.value)}/></label></div><button className="primary-btn" disabled={busy}>حفظ الحركة كمسودة</button></form>
