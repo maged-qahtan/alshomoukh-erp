@@ -7,6 +7,7 @@ test("performance migration adds indexes for every uncovered foreign key", async
     new URL("../../database/migrations/0033_index_uncovered_foreign_keys.sql", import.meta.url),
     "utf8",
   );
+  const normalized = sql.replace(/\s+/g, " ").toLowerCase();
   const expected = [
     ["cash_accounts", "company_id, ledger_account_id"],
     ["cash_transactions", "company_id, contra_account_id"],
@@ -36,12 +37,11 @@ test("performance migration adds indexes for every uncovered foreign key", async
   ];
 
   for (const [table, columns] of expected) {
-    const columnPattern = columns.split(", ").join("\\s*,\\s*");
-    const pattern = new RegExp(
-      `create index if not exists [a-z0-9_]+\\\\s+on public\\\\.${table}\\\\s*\\\\(\\\\s*${columnPattern}\\\\s*\\\\)`,
-      "i",
+    assert.ok(
+      normalized.includes(`create index if not exists `) &&
+        normalized.includes(` on public.${table} (${columns.toLowerCase()})`),
+      `missing index for ${table}(${columns})`,
     );
-    assert.match(sql, pattern, `missing index for ${table}(${columns})`);
   }
-  assert.equal((sql.match(/create index if not exists/gi) || []).length, expected.length);
+  assert.equal((normalized.match(/create index if not exists/g) || []).length, expected.length);
 });
