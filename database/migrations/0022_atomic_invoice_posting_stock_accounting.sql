@@ -39,6 +39,9 @@ declare
   v_inventory uuid;
   v_cogs uuid;
   v_qty numeric;
+  v_remaining numeric;
+  v_take numeric;
+  v_total_available numeric;
   v_cost numeric(20,2) := 0;
   v_line_no integer := 0;
   v_line record;
@@ -81,15 +84,25 @@ begin
     where l.invoice_id=p_invoice_id and l.company_id=v_invoice.company_id
     order by l.id
   loop
-    select quantity_on_hand,weighted_unit_cost into v_stock
+    select coalesce(sum(quantity_on_hand),0) into v_total_available
     from public.stock_on_hand
-    where company_id=v_invoice.company_id and product_id=v_line.product_id
-    order by warehouse_id;
-    if not found or coalesce(v_stock.quantity_on_hand,0) < v_line.quantity then
+    where company_id=v_invoice.company_id and product_id=v_line.product_id;
+    if v_total_available < v_line.quantity then
       raise exception 'Insufficient stock for product %',v_line.product_id;
     end if;
-    v_qty := v_line.quantity;
-    v_cost := v_cost + round(v_qty * coalesce(v_stock.weighted_unit_cost,0),2);
+    v_remaining := v_line.quantity;
+    for v_stock in
+      select warehouse_id,quantity_on_hand,weighted_unit_cost
+      from public.stock_on_hand
+      where company_id=v_invoice.company_id and product_id=v_line.product_id
+        and quantity_on_hand>0
+      order by warehouse_id
+    loop
+      exit when v_remaining<=0;
+      v_take := least(v_remaining,v_stock.quantity_on_hand);
+      v_cost := v_cost + round(v_take * coalesce(v_stock.weighted_unit_cost,0),2);
+      v_remaining := v_remaining-v_take;
+    end loop;
   end loop;
 
   perform pg_advisory_xact_lock(hashtextextended(v_invoice.company_id::text,0));
@@ -126,17 +139,21 @@ begin
     where l.invoice_id=p_invoice_id and l.company_id=v_invoice.company_id
     order by l.id
   loop
-    select quantity_on_hand,weighted_unit_cost into v_stock
-    from public.stock_on_hand
-    where company_id=v_invoice.company_id and product_id=v_line.product_id
-    order by warehouse_id;
-    insert into public.stock_movements(company_id,product_id,warehouse_id,movement_type,quantity_in,quantity_out,unit_cost,reference_type,reference_id,notes,created_by)
-    select v_invoice.company_id,v_line.product_id,s.warehouse_id,'sale',0,v_line.quantity,
-      coalesce(s.weighted_unit_cost,0),'sales_invoice',p_invoice_id,'صرف آلي عند ترحيل فاتورة المبيعات',v_user_id
-    from public.stock_on_hand s
-    where s.company_id=v_invoice.company_id and s.product_id=v_line.product_id
-    order by s.warehouse_id
-    limit 1;
+    v_remaining := v_line.quantity;
+    for v_stock in
+      select warehouse_id,quantity_on_hand,weighted_unit_cost
+      from public.stock_on_hand
+      where company_id=v_invoice.company_id and product_id=v_line.product_id
+        and quantity_on_hand>0
+      order by warehouse_id
+    loop
+      exit when v_remaining<=0;
+      v_take := least(v_remaining,v_stock.quantity_on_hand);
+      insert into public.stock_movements(company_id,product_id,warehouse_id,movement_type,quantity_in,quantity_out,unit_cost,reference_type,reference_id,notes,created_by)
+      values(v_invoice.company_id,v_line.product_id,v_stock.warehouse_id,'sale',0,v_take,
+        coalesce(v_stock.weighted_unit_cost,0),'sales_invoice',p_invoice_id,'صرف آلي عند ترحيل فاتورة المبيعات',v_user_id);
+      v_remaining := v_remaining-v_take;
+    end loop;
   end loop;
 
   update public.sales_invoices set status='posted',journal_entry_id=v_journal_id,posted_at=now(),posted_by=v_user_id
