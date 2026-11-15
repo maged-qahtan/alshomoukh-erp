@@ -61,7 +61,7 @@ In migration `0022_atomic_invoice_posting_stock_accounting.sql`, `post_sales_inv
 
 - Source review: completed for the listed baseline files.
 - TypeScript/Next.js CI: run #142 passed all four steps before the latest SQL/test additions; the newest commit's CI is pending.
-- Static migration guard tests: added for reconstructed 0024, cash-transfer 0028, and purchase-return hardening 0029.
+- Static migration guard tests: added for sales stock locking 0027, reconstructed 0024, cash-transfer 0028, and purchase-return hardening 0029.
 - SQL syntax/integration tests: not run against PostgreSQL.
 - Staging concurrency tests: not run.
 - Remote Supabase migration state: inspected read-only; current history ends at 0026.
