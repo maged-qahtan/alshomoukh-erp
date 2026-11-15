@@ -38,7 +38,7 @@ create or replace function public.guard_posted_cash_transaction_immutable()
 returns trigger
 language plpgsql
 set search_path = pg_catalog, public
-as $
+as $guard$
 begin
   if old.status = 'posted' then
     raise exception 'Posted cash transactions are immutable; create a documented reversal instead';
@@ -48,7 +48,7 @@ begin
   end if;
   return new;
 end;
-$;
+$guard$;
 
 drop trigger if exists cash_transactions_posted_immutable on public.cash_transactions;
 create trigger cash_transactions_posted_immutable
@@ -238,7 +238,7 @@ begin
       'destination_cash_account_id', destination_ca.id,
       'journal_entry_id', v_journal,
       'amount', t.amount,
-      'currency_code', t.currency_code
+      'currency_code', source_ca.currency_code
     )
   );
 
