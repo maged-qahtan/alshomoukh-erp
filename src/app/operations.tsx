@@ -69,7 +69,7 @@ export default function Operations({ supabase, companyId, appUserId }: Props) {
     setSales(results[3].data ?? []); setPurchases(results[4].data ?? []); setCashAccounts(results[5].data ?? []);
     setCashTransactions(results[7].data ?? []); setExpenses(results[8].data ?? []); setAssets(results[9].data ?? []);
     setAssetBalances(results[10].data??[]); setAssetDisposals(results[11].data??[]); setLedgerAccounts(results[6].data??[]);
-    setSalesReturnLines(results[10].data??[]); setPurchaseReturnLines(results[11].data??[]); setSalesReturns(results[12].data??[]); setPurchaseReturns(results[13].data??[]); setCostCenters(results[14].data??[]);
+    setSalesReturnLines(results[12].data??[]); setPurchaseReturnLines(results[13].data??[]); setSalesReturns(results[14].data??[]); setPurchaseReturns(results[15].data??[]); setCostCenters(results[16].data??[]);
   }, [supabase,companyId]);
   useEffect(() => { void refresh(); }, [refresh]);
 
