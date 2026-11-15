@@ -24,10 +24,10 @@ test("sales return serializes stock reads before checking returned stock", async
   const sql = await read("0024_atomic_sales_purchase_returns.sql");
   const fn = sql.slice(sql.indexOf("create or replace function public.post_sales_return"), sql.indexOf("create or replace function public.post_purchase_return"));
   const lock = fn.indexOf("perform pg_advisory_xact_lock");
-  const stockRead = fn.indexOf("from public.stock_on_hand");
+  const journalWrite = fn.indexOf("insert into public.journal_entries");
   const stockWrite = fn.indexOf("insert into public.stock_movements");
-  assert.ok(lock >= 0 && stockRead > lock && stockWrite > stockRead);
-  assert.match(fn, /if v_onhand<0 then/i);
+  assert.ok(lock >= 0 && journalWrite > lock && stockWrite > journalWrite);
+  assert.doesNotMatch(fn, /from public\\.stock_on_hand/i);
 });
 
 test("sales and purchase return drafts prevent cumulative quantity above original invoice line", async () => {
