@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState, type FormEvent } from "react";
 
 type Props = { supabase: any; companyId: string; appUserId: string | null };
-const tabs = ["الأصناف والمخزون", "العملاء والموردون", "المبيعات", "المشتريات", "الصندوق والبنوك", "المصروفات", "الأصول الثابتة"] as const;
+const tabs = ["الأصناف والمخزون", "العملاء والموردون", "المبيعات", "المشتريات", "المرتجعات", "الصندوق والبنوك", "المصروفات", "الأصول الثابتة"] as const;
 type Tab = typeof tabs[number];
 
 export default function Operations({ supabase, companyId, appUserId }: Props) {
@@ -17,6 +17,8 @@ export default function Operations({ supabase, companyId, appUserId }: Props) {
   const [cashTransactions, setCashTransactions] = useState<any[]>([]);
   const [expenses, setExpenses] = useState<any[]>([]);
   const [assets, setAssets] = useState<any[]>([]);
+  const [salesReturnLines,setSalesReturnLines]=useState<any[]>([]); const [purchaseReturnLines,setPurchaseReturnLines]=useState<any[]>([]); const [salesReturns,setSalesReturns]=useState<any[]>([]); const [purchaseReturns,setPurchaseReturns]=useState<any[]>([]);
+  const [returnKind,setReturnKind]=useState<"sales"|"purchase">("sales"); const [returnLine,setReturnLine]=useState(""); const [returnWarehouse,setReturnWarehouse]=useState(""); const [returnNo,setReturnNo]=useState(""); const [returnQty,setReturnQty]=useState("1"); const [returnReason,setReturnReason]=useState(""); const [returnDate,setReturnDate]=useState(new Date(Date.now()-new Date().getTimezoneOffset()*60000).toISOString().slice(0,10));
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState("");
   const [partyCode,setPartyCode]=useState(""); const [partyName,setPartyName]=useState(""); const [partyType,setPartyType]=useState("customer"); const [partyPhone,setPartyPhone]=useState(""); const [partyTax,setPartyTax]=useState("");
@@ -48,12 +50,17 @@ export default function Operations({ supabase, companyId, appUserId }: Props) {
       supabase.from("cash_transactions").select("id,transaction_date,transaction_type,amount,description,status").eq("company_id",companyId).order("transaction_date",{ascending:false}).limit(50),
       supabase.from("expenses").select("id,expense_number,expense_date,category,description,amount,status").eq("company_id",companyId).order("expense_date",{ascending:false}).limit(50),
       supabase.from("fixed_assets").select("id,asset_code,name_ar,acquisition_date,acquisition_cost,useful_life_months,residual_value,is_active").eq("company_id",companyId).order("asset_code"),
+      supabase.from("sales_invoice_lines").select("id,invoice_id,product_id,description,quantity,unit_price,vat_rate,line_total,sales_invoices!inner(invoice_number,status)").eq("company_id",companyId).eq("sales_invoices.status","posted"),
+      supabase.from("purchase_invoice_lines").select("id,invoice_id,product_id,description,quantity,unit_cost,vat_rate,line_total,purchase_invoices!inner(invoice_number,status)").eq("company_id",companyId).eq("purchase_invoices.status","posted"),
+      supabase.from("sales_returns").select("id,return_number,return_date,quantity,grand_total,status,journal_entry_id").eq("company_id",companyId).order("created_at",{ascending:false}).limit(50),
+      supabase.from("purchase_returns").select("id,return_number,return_date,quantity,grand_total,status,journal_entry_id").eq("company_id",companyId).order("created_at",{ascending:false}).limit(50),
     ]);
     const error = results.find(x => x.error)?.error;
     if (error) setNotice(error.message);
     setProducts(results[0].data ?? []); setWarehouses(results[1].data ?? []); setStock(results[2].data ?? []);
     setSales(results[3].data ?? []); setPurchases(results[4].data ?? []); setCashAccounts(results[5].data ?? []);
     setCashTransactions(results[6].data ?? []); setExpenses(results[7].data ?? []); setAssets(results[8].data ?? []);
+    setSalesReturnLines(results[9].data??[]); setPurchaseReturnLines(results[10].data??[]); setSalesReturns(results[11].data??[]); setPurchaseReturns(results[12].data??[]);
   }, [supabase,companyId]);
   useEffect(() => { void refresh(); }, [refresh]);
 
@@ -124,6 +131,16 @@ export default function Operations({ supabase, companyId, appUserId }: Props) {
     if(!result.error){setInvoiceNo("");setInvoiceQty("1");}
     return result;
   },kind==="sales"?"تم حفظ مسودة فاتورة البيع مع تفاصيلها ذرياً. لم يتم ترحيلها محاسبياً.":"تم حفظ مسودة فاتورة الشراء مع تفاصيلها ذرياً. لم يتم ترحيلها محاسبياً.");
+  const saveReturn=(e:FormEvent)=>submit(e,async()=>{
+    const line=(returnKind==="sales"?salesReturnLines:purchaseReturnLines).find(x=>x.id===returnLine);
+    const qty=Number(returnQty); if(!line||!returnNo.trim()||!returnReason.trim()||!Number.isFinite(qty)||qty<=0) throw new Error("أكمل رقم المرتجع والفاتورة الأصلية والكمية والسبب.");
+    if(returnKind==="sales"&&!returnWarehouse) throw new Error("اختر المستودع الذي ستُعاد إليه البضاعة.");
+    const rpc=returnKind==="sales"?"create_sales_return_draft":"create_purchase_return_draft";
+    const params=returnKind==="sales"?{p_company_id:companyId,p_return_number:returnNo.trim(),p_return_date:returnDate,p_original_line_id:line.id,p_warehouse_id:returnWarehouse,p_quantity:qty,p_reason:returnReason.trim()}:{p_company_id:companyId,p_return_number:returnNo.trim(),p_return_date:returnDate,p_original_line_id:line.id,p_quantity:qty,p_reason:returnReason.trim()};
+    const r=await supabase.rpc(rpc,params); if(!r.error){setReturnNo("");setReturnQty("1");setReturnReason("");setReturnLine("");} return r;
+  }, "تم حفظ مسودة المرتجع. لم يتم تغيير المخزون أو الحسابات حتى الترحيل.");
+  async function postReturn(kind:"sales"|"purchase",id:string){if(!window.confirm("سيتم ترحيل المرتجع وعكس الأثر المحاسبي وتحديث المخزون. هل تريد المتابعة؟"))return;setBusy(true);setNotice("");try{const r=await supabase.rpc(kind==="sales"?"post_sales_return":"post_purchase_return",{p_return_id:id});if(r.error)throw r.error;setNotice("تم ترحيل المرتجع وإنشاء القيد وحركة المخزون.");await refresh();}catch(e:any){setNotice(e?.message??"تعذر ترحيل المرتجع.");}finally{setBusy(false);}}
+
   const saveCashAccount = (e: FormEvent) => submit(e, async()=>{const r=await supabase.from("cash_accounts").insert({company_id:companyId,code:cashCode.trim(),name_ar:cashName.trim(),account_type:cashType});if(!r.error){setCashCode("");setCashName("");}return r;},"تم حفظ حساب الصندوق/البنك.");
   const saveCashTransaction = (e: FormEvent) => submit(e,async()=>{if(!cashAccount||Number(cashAmount)<=0)throw new Error("اختر الحساب وأدخل مبلغاً صحيحاً.");const r=await supabase.from("cash_transactions").insert({company_id:companyId,cash_account_id:cashAccount,transaction_type:cashKind,amount:Number(cashAmount),description:cashDescription.trim(),status:"draft",created_by:appUserId});if(!r.error){setCashAmount("");setCashDescription("");}return r;},"تم حفظ مسودة حركة الصندوق.");
   const saveExpense = (e: FormEvent) => submit(e,async()=>{const r=await supabase.from("expenses").insert({company_id:companyId,expense_number:expenseNo.trim(),category:expenseCategory.trim(),description:expenseDescription.trim(),amount:Number(expenseAmount),status:"draft",created_by:appUserId});if(!r.error){setExpenseNo("");setExpenseCategory("");setExpenseDescription("");setExpenseAmount("");}return r;},"تم حفظ المصروف كمسودة.");
@@ -169,6 +186,15 @@ export default function Operations({ supabase, companyId, appUserId }: Props) {
       </div><button className="primary-btn" disabled={busy}>حفظ مسودة الفاتورة</button></form>
       <h3>الفواتير المحفوظة</h3><div className="table-wrap"><table><thead><tr><th>رقم الفاتورة</th><th>التاريخ</th><th>الإجمالي</th><th>الحالة</th><th>القيد المرتبط</th><th>الإجراء</th></tr></thead><tbody>{(tab==="المبيعات"?sales:purchases).map(r=><tr key={r.id}><td>{r.invoice_number}</td><td>{r.invoice_date?new Date(`${r.invoice_date}T00:00:00`).toLocaleDateString("ar-YE",{year:"numeric",month:"2-digit",day:"2-digit"}):"—"}</td><td>{Number(r.grand_total).toFixed(2)}</td><td>{r.status==="posted"?"مرحّلة":r.status==="cancelled"?"ملغاة":"مسودة"}</td><td>{r.journal_entry_id||"—"}</td><td>{r.status==="draft"?<button type="button" className="primary-btn" disabled={busy} onClick={()=>void postInvoice(tab==="المبيعات"?"sales":"purchase",r.id)}>ترحيل</button>:"—"}</td></tr>)}</tbody></table></div>
     </>}
+    {tab==="المرتجعات"&&<><h3>إنشاء مرتجع مبيعات أو مشتريات</h3><p className="notice">المرتجع مرتبط ببند فاتورة أصلية مُرحّلة. لا يمكن تجاوز الكمية الأصلية، وتُحدّث الحسابات والمخزون عند الترحيل فقط.</p><form className="journal-form" onSubmit={saveReturn}><div className="form-fields">
+      <label>نوع المرتجع<select value={returnKind} onChange={e=>{setReturnKind(e.target.value as "sales"|"purchase");setReturnLine("");}}><option value="sales">مرتجع مبيعات (من عميل)</option><option value="purchase">مرتجع مشتريات (إلى مورد)</option></select></label>
+      <label>رقم المرتجع<input required value={returnNo} onChange={e=>setReturnNo(e.target.value)}/></label><label>التاريخ<input type="date" required value={returnDate} onChange={e=>setReturnDate(e.target.value)}/></label>
+      <label>بند الفاتورة الأصلية<select required value={returnLine} onChange={e=>setReturnLine(e.target.value)}><option value="">اختر بنداً من فاتورة مرحلة</option>{(returnKind==="sales"?salesReturnLines:purchaseReturnLines).map(l=><option key={l.id} value={l.id}>{l.sales_invoices?.invoice_number||l.purchase_invoices?.invoice_number} — {l.description} — الكمية الأصلية: {l.quantity}</option>)}</select></label>
+      {returnKind==="sales"&&<label>مستودع إعادة البضاعة<select required value={returnWarehouse} onChange={e=>setReturnWarehouse(e.target.value)}><option value="">اختر المستودع</option>{warehouses.map(w=><option key={w.id} value={w.id}>{w.name_ar}</option>)}</select></label>}
+      <label>الكمية المرتجعة<input type="number" required min="0.001" step="0.001" value={returnQty} onChange={e=>setReturnQty(e.target.value)}/></label><label>سبب المرتجع<input required value={returnReason} onChange={e=>setReturnReason(e.target.value)}/></label>
+    </div><button className="primary-btn" disabled={busy}>حفظ مسودة المرتجع</button></form>
+    <h3>مرتجعات المبيعات</h3><div className="table-wrap"><table><thead><tr><th>الرقم</th><th>التاريخ</th><th>الكمية</th><th>الإجمالي</th><th>الحالة</th><th>القيد</th><th>إجراء</th></tr></thead><tbody>{salesReturns.map(r=><tr key={r.id}><td>{r.return_number}</td><td>{r.return_date}</td><td>{r.quantity}</td><td>{Number(r.grand_total).toFixed(2)}</td><td>{r.status==="posted"?"مرحّل":"مسودة"}</td><td>{r.journal_entry_id||"—"}</td><td>{r.status==="draft"?<button type="button" className="primary-btn" disabled={busy} onClick={()=>void postReturn("sales",r.id)}>ترحيل</button>:"—"}</td></tr>)}</tbody></table></div>
+    <h3>مرتجعات المشتريات</h3><div className="table-wrap"><table><thead><tr><th>الرقم</th><th>التاريخ</th><th>الكمية</th><th>الإجمالي</th><th>الحالة</th><th>القيد</th><th>إجراء</th></tr></thead><tbody>{purchaseReturns.map(r=><tr key={r.id}><td>{r.return_number}</td><td>{r.return_date}</td><td>{r.quantity}</td><td>{Number(r.grand_total).toFixed(2)}</td><td>{r.status==="posted"?"مرحّل":"مسودة"}</td><td>{r.journal_entry_id||"—"}</td><td>{r.status==="draft"?<button type="button" className="primary-btn" disabled={busy} onClick={()=>void postReturn("purchase",r.id)}>ترحيل</button>:"—"}</td></tr>)}</tbody></table></div></>}
     {tab==="الصندوق والبنوك"&&<><h3>إضافة صندوق أو حساب بنكي</h3><form className="journal-form" onSubmit={saveCashAccount}><div className="form-fields"><label>الرمز<input required value={cashCode} onChange={e=>setCashCode(e.target.value)}/></label><label>الاسم<input required value={cashName} onChange={e=>setCashName(e.target.value)}/></label><label>النوع<select value={cashType} onChange={e=>setCashType(e.target.value)}><option value="cash">صندوق</option><option value="bank">بنك</option></select></label></div><button className="primary-btn" disabled={busy}>حفظ الحساب</button></form>
       <h3>حركة قبض أو صرف (مسودة)</h3><form className="journal-form" onSubmit={saveCashTransaction}><div className="form-fields"><label>الحساب<select required value={cashAccount} onChange={e=>setCashAccount(e.target.value)}><option value="">اختر الحساب</option>{cashAccounts.map(a=><option key={a.id} value={a.id}>{a.code} — {a.name_ar}</option>)}</select></label><label>النوع<select value={cashKind} onChange={e=>setCashKind(e.target.value)}><option value="receipt">قبض</option><option value="payment">صرف</option></select></label><label>المبلغ<input required type="number" min="0.01" step="0.01" value={cashAmount} onChange={e=>setCashAmount(e.target.value)}/></label><label>البيان<input required value={cashDescription} onChange={e=>setCashDescription(e.target.value)}/></label></div><button className="primary-btn" disabled={busy}>حفظ الحركة كمسودة</button></form>
       <h3>حسابات الصندوق والبنوك</h3><div className="table-wrap"><table><thead><tr><th>الرمز</th><th>الاسم</th><th>النوع</th><th>الرصيد الافتتاحي</th></tr></thead><tbody>{cashAccounts.map(a=><tr key={a.id}><td>{a.code}</td><td>{a.name_ar}</td><td>{a.account_type==="cash"?"صندوق":"بنك"}</td><td>{a.opening_balance}</td></tr>)}</tbody></table></div>
