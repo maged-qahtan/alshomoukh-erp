@@ -115,9 +115,8 @@ begin
     raise exception 'Destination cash/bank account must be active and linked to a ledger account';
   end if;
 
-  if source_ca.currency_code <> destination_ca.currency_code
-     or t.currency_code <> source_ca.currency_code then
-    raise exception 'Transfers require matching transaction and account currencies';
+  if source_ca.currency_code <> destination_ca.currency_code then
+    raise exception 'Transfers require matching source and destination account currencies';
   end if;
 
   if source_ca.ledger_account_id = destination_ca.ledger_account_id then
