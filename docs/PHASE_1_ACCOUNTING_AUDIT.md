@@ -20,15 +20,15 @@ In migration `0022_atomic_invoice_posting_stock_accounting.sql`, `post_sales_inv
 ### P0 — Migration history and deployment reproducibility
 
 - Multiple migration files share the same numeric version prefix: `0014`, `0015`, `0016`, `0017`, `0018`, and `0019`. This is incompatible with migration runners that require a unique version per migration. Confirm the actual Supabase migration history before renaming or consolidating anything; do not rename already-applied migrations blindly.
-- The repository tree has no `0024` migration file, but the linked Supabase project's remote history contains an applied migration named `0024_atomic_sales_purchase_returns`. Recover and verify the exact source migration before attempting a fresh environment rebuild; do not fabricate a replacement from the remote name alone.
+- The original `0024` file was missing from GitHub although the linked Supabase project had applied it. A recovery source file is now reconstructed from read-only catalog evidence: live table columns/types/defaults, constraints, indexes, RLS policies, grants, and the four deployed function definitions. This is a catalog-derived reconstruction, not a byte-for-byte recovery of the historical file; compare its behavior on a disposable database before treating it as canonical.
 - `database/README.md` describes only the first three migrations and therefore is not a reliable deployment guide for the current schema.
 - A Node test script and 10 journal-validation unit tests have now been added. CI run #135 passed `npm install`, `npm run test`, `npm run typecheck`, and `npm run build`. SQL integration, RLS, and concurrency tests are still outstanding.
 
 ### P1 — Operational accounting completeness
 
-- `post_cash_transaction` currently accepts only `receipt` and `payment`, while the `cash_transactions` table also allows `transfer_in` and `transfer_out`. A transfer must be implemented as one atomic paired movement with a balanced journal, not as two unrelated records.
+- `post_cash_transaction` accepts only `receipt` and `payment`, while `cash_transactions` also allows `transfer_in` and `transfer_out`. A new atomic transfer RPC is drafted in `0028_atomic_cash_bank_transfers.sql`; it creates paired movements and one balanced journal. The cash UI is intentionally not wired to it until the database migration is tested and applied.
 - The fixed-assets schema includes `asset_depreciation`, but the inspected application and migration set do not yet establish a complete scheduled depreciation workflow (calculation, idempotent posting, disposal, and accumulated-depreciation reporting).
-- Returns are exposed in the operations UI; their full accounting and inventory reversal lifecycle needs dedicated verification, including source-document linkage, posting idempotency, and reversal behavior.
+- Returns are exposed in the operations UI and the four live return RPC definitions plus both table schemas are now represented in reconstructed migration `0024_atomic_sales_purchase_returns.sql`. Catalog review found follow-up risks: sales return posting reads stock before acquiring the advisory lock, and its `v_onhand` result is not used to validate stock; purchase return checks stock before acquiring the lock. These require a separate hardening migration and concurrency tests.
 - Sales and purchase invoice posting need database-level immutability controls equivalent to posted-expense protection. Verify that posted invoice headers and lines cannot be edited or deleted through direct API calls, not merely hidden or disabled in the UI.
 
 ### P1 — Accounting report validation
@@ -49,10 +49,10 @@ In migration `0022_atomic_invoice_posting_stock_accounting.sql`, `post_sales_inv
 
 ## Recommended execution order
 
-1. Remote Supabase migration history and environment boundaries have been inspected read-only. The linked project currently records migrations through `0026_expense_accounting_posting`; migrations 0027 and 0028 are not applied. The remote history includes 0024 although its source file is absent from this repository.
+1. Remote Supabase migration history and environment boundaries have been inspected read-only. The linked project currently records migrations through `0026_expense_accounting_posting`; migrations 0027 and 0028 are not applied. The missing 0024 source has been reconstructed from the live catalog, but still requires a clean-database comparison.
 2. Apply the sales stock-lock migration to a disposable staging database and run concurrent sales/purchase tests.
 3. Add a database test harness for posting, reversal, period closing, year-end carry-forward, RLS, and report invariants.
-4. Resolve migration version uniqueness and recover the missing 0024 source based on the actual remote migration history; update the deployment guide.
+4. Resolve migration version uniqueness based on remote migration history; compare reconstructed 0024 against a clean database before approving fresh installs.
 5. Apply and verify the atomic cash/bank transfer migration in staging, then add the UI workflow. The migration is drafted in `0028_atomic_cash_bank_transfers.sql`; it has not been applied.
 6. Complete fixed-asset depreciation and returns accounting.
 7. Reconcile all financial reports to controlled test ledgers before production approval.
@@ -60,7 +60,8 @@ In migration `0022_atomic_invoice_posting_stock_accounting.sql`, `post_sales_inv
 ## Validation status
 
 - Source review: completed for the listed baseline files.
-- TypeScript/Next.js CI: run #135 passed all four steps; later CI runs for the newest commits are pending at the time of this update.
+- TypeScript/Next.js CI: run #142 passed all four steps before the latest SQL/test additions; the newest commit's CI is pending.
+- Static migration guard tests: added for reconstructed 0024 and cash-transfer 0028.
 - SQL syntax/integration tests: not run against PostgreSQL.
 - Staging concurrency tests: not run.
 - Remote Supabase migration state: inspected read-only; current history ends at 0026.
