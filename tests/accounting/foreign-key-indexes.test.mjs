@@ -36,8 +36,9 @@ test("performance migration adds indexes for every uncovered foreign key", async
   ];
 
   for (const [table, columns] of expected) {
+    const columnPattern = columns.split(", ").join("\\s*,\\s*");
     const pattern = new RegExp(
-      `create index if not exists [a-z0-9_]+\\s+on public\\.${table}\\s*\\(\\s*${columns.replace(/[.*+?^${}()|[\\]\\\\]/g, "\\$&").replace(/, /g, "\\s*,\\s*")}\\s*\\)`,
+      `create index if not exists [a-z0-9_]+\\\\s+on public\\\\.${table}\\\\s*\\\\(\\\\s*${columnPattern}\\\\s*\\\\)`,
       "i",
     );
     assert.match(sql, pattern, `missing index for ${table}(${columns})`);
