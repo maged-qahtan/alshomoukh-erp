@@ -27,7 +27,7 @@ In migration `0022_atomic_invoice_posting_stock_accounting.sql`, `post_sales_inv
 ### P1 — Operational accounting completeness
 
 - `post_cash_transaction` accepts only `receipt` and `payment`, while `cash_transactions` also allows `transfer_in` and `transfer_out`. A new atomic transfer RPC is drafted in `0028_atomic_cash_bank_transfers.sql`; it creates paired movements and one balanced journal. The cash UI is intentionally not wired to it until the database migration is tested and applied.
-- Migration `0030_fixed_asset_depreciation_posting.sql` now adds monthly straight-line depreciation posting through accounts 5204/1202, idempotency per asset/month, residual-value cap, fiscal-period checks, audit logging, and a `fixed_asset_balances` view for accumulated depreciation and net book value. Asset disposal and UI integration remain outstanding.
+- Migration `0030_fixed_asset_depreciation_posting.sql` now adds monthly straight-line depreciation posting through accounts 5204/1202, idempotency per asset/month, residual-value cap, fiscal-period checks, audit logging, and a `fixed_asset_balances` view for accumulated depreciation and net book value. Migration `0031_fixed_asset_disposal_posting.sql` now adds controlled disposal with accumulated-depreciation clearing, cash proceeds, gain/loss recognition, audit logging, and asset deactivation. The operations UI now exposes monthly depreciation posting, book-value reporting, and disposal entry/history. These workflows depend on migrations 0030–0031 being applied after staging validation.
 - Returns are exposed in the operations UI and the four live return RPC definitions plus both table schemas are now represented in reconstructed migration `0024_atomic_sales_purchase_returns.sql`. Catalog review found follow-up risks: sales return posting reads stock before acquiring the advisory lock, and its `v_onhand` result is not used to validate stock; purchase return checks stock before acquiring the lock. Migration `0029_harden_purchase_return_posting.sql` now moves the company advisory lock ahead of the stock availability read, checks the stock quantity under that lock, adds a post-status race guard, and protects posted returns from direct update/delete. Static regression tests were added; PostgreSQL staging/concurrency tests are still required.
 - Sales and purchase invoice posting need database-level immutability controls equivalent to posted-expense protection. Verify that posted invoice headers and lines cannot be edited or deleted through direct API calls, not merely hidden or disabled in the UI.
 
@@ -54,14 +54,14 @@ In migration `0022_atomic_invoice_posting_stock_accounting.sql`, `post_sales_inv
 3. Add a database test harness for posting, reversal, period closing, year-end carry-forward, RLS, and report invariants.
 4. Resolve migration version uniqueness based on remote migration history; compare reconstructed 0024 against a clean database before approving fresh installs.
 5. Apply and verify migrations 0027–0029 in staging in order, including the cash/bank transfer and purchase-return concurrency checks. None has been applied to the linked project.
-6. Stage and validate monthly depreciation posting 0030, then add the fixed-asset UI and disposal workflow; finish returns integration tests.
+6. Stage and validate fixed-asset migrations 0030–0031 and verify depreciation/disposal accounting with real test fixtures; finish returns integration tests.
 7. Reconcile all financial reports to controlled test ledgers before production approval.
 
 ## Validation status
 
 - Source review: completed for the listed baseline files.
 - TypeScript/Next.js CI: run #142 passed all four steps before the latest SQL/test additions; the newest commit's CI is pending.
-- Static migration guard tests: added for sales stock locking 0027, reconstructed 0024, cash-transfer 0028, purchase-return hardening 0029, and fixed-asset depreciation 0030.
+- Static migration guard tests: added for sales stock locking 0027, reconstructed 0024, cash-transfer 0028, purchase-return hardening 0029, fixed-asset depreciation 0030, and disposal 0031.
 - SQL syntax/integration tests: not run against PostgreSQL.
 - Staging concurrency tests: not run.
 - Remote Supabase migration state: inspected read-only; current history ends at 0026.
