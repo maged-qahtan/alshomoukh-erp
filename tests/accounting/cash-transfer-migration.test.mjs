@@ -39,3 +39,9 @@ test("audit record uses the source cash account currency field", () => {
   assert.match(migration, /'currency_code', source_ca\.currency_code/i);
   assert.doesNotMatch(migration, /'currency_code', t\.currency_code/i);
 });
+
+test("cash transfer posting is bound to the destination persisted on its draft", () => {
+  assert.match(migration, /t\.transfer_counter_account_id is null/i);
+  assert.match(migration, /t\.transfer_counter_account_id <> p_destination_cash_account_id/i);
+  assert.match(migration, /destination account does not match the saved transfer draft/i);
+});

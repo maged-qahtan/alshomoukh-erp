@@ -30,7 +30,7 @@ Posted cash transactions are immutable. Corrections must use a documented revers
 3. Regenerate database types and update the cash/bank screen to expose transfer-out drafts and their destination account.
 4. Run the staging checks below before enabling the UI in production.
 
-Do not deploy UI code that selects or writes the new transfer columns before migration 0028 has been applied. The current UI intentionally remains unchanged until that database prerequisite is met.
+Do not deploy UI code that selects or writes the new transfer columns before migration 0028 has been applied. The transfer UI is implemented on branch `development/cash-bank-transfer-ui` and is not part of production `main`. It must not be merged or deployed until migrations 0027 and 0028 are applied and verified in an isolated staging database. The UI creates `transfer_out` drafts and calls `post_cash_transfer` only when the user explicitly posts the draft; it requires selecting the matching source and destination accounts in the form.
 
 ## Staging verification checklist
 

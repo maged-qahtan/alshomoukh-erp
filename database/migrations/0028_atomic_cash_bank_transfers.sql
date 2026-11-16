@@ -99,6 +99,13 @@ begin
     raise exception 'Choose a different destination cash/bank account';
   end if;
 
+  -- The destination is fixed when the draft is created. Do not allow a later
+  -- UI state change or stale selection to redirect an already-saved transfer.
+  if t.transfer_counter_account_id is null
+     or t.transfer_counter_account_id <> p_destination_cash_account_id then
+    raise exception 'Destination account does not match the saved transfer draft';
+  end if;
+
   if t.amount <= 0 then
     raise exception 'Transfer amount must be greater than zero';
   end if;

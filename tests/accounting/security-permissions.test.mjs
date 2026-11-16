@@ -50,7 +50,7 @@ test("company bootstrap is authenticated, one-time, and provisions the owner rol
   assert.ok(fn, "bootstrap_company definition must exist");
   assert.match(fn, /security definer/i);
   assert.match(fn, /set search_path\s*=\s*pg_catalog,\s*public,\s*auth/i);
-  assert.match(fn, /auth\.uid\(\) is null/i);
+  assert.match(fn, /v_auth_id\s*:=\s*auth\.uid\(\);[\s\S]*?if v_auth_id is null then/i);
   assert.match(fn, /already completed company onboarding/i);
   assert.match(fn, /where code = 'owner'/i);
   assert.match(fn, /insert into public\.company_users/i);
