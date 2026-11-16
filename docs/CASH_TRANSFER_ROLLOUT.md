@@ -23,14 +23,26 @@ The RPC validates company authorization, source/destination account status and l
 
 Posted cash transactions are immutable. Corrections must use a documented reversal workflow; direct editing/deletion is rejected.
 
+## Repository and database status
+
+- The transfer UI was merged into `main` in PR #4. The old statement that it remains only on `development/cash-bank-transfer-ui` is obsolete.
+- The UI merge and a successful CI run do not apply database migrations.
+- The linked Supabase project was checked read-only and currently records migrations only through `0026_expense_accounting_posting`.
+- Migrations `0027_serialize_sales_stock_availability_check.sql` and `0028_atomic_cash_bank_transfers.sql` are not recorded in that database.
+- Therefore the transfer feature is present in the repository but is **not verified or approved for production use** against the linked database schema.
+- No migration or production database change was made as part of this documentation update.
+
 ## Required rollout order
 
-1. Review and apply migration `0027_serialize_sales_stock_availability_check.sql` first if it is not already present in the target database.
-2. Apply `0028_atomic_cash_bank_transfers.sql`.
-3. Regenerate database types and update the cash/bank screen to expose transfer-out drafts and their destination account.
-4. Run the staging checks below before enabling the UI in production.
+1. Provision a separate staging Supabase project. Do not use production data for these tests.
+2. Resolve and document the duplicate migration sequence numbers in the repository and validate a clean database bootstrap path.
+3. Apply migration `0027_serialize_sales_stock_availability_check.sql` to staging.
+4. Apply migration `0028_atomic_cash_bank_transfers.sql` to staging.
+5. Verify the schema, RPC signature, grants, and generated database types.
+6. Run every staging check below, including negative authorization, retry/idempotency, and concurrent transfer tests.
+7. Only after staging acceptance, plan the production migration and UI release with backup and rollback steps. Production changes require separate explicit approval.
 
-Do not deploy UI code that selects or writes the new transfer columns before migration 0028 has been applied. The transfer UI is implemented on branch `development/cash-bank-transfer-ui` and is not part of production `main`. It must not be merged or deployed until migrations 0027 and 0028 are applied and verified in an isolated staging database. The UI creates `transfer_out` drafts and calls `post_cash_transfer` only when the user explicitly posts the draft; it requires selecting the matching source and destination accounts in the form.
+Do not enable or rely on the transfer UI against a database that lacks the transfer columns and RPC. The UI creates `transfer_out` drafts and calls `post_cash_transfer` only when the user explicitly posts the draft; the destination account must match the destination persisted on the draft.
 
 ## Staging verification checklist
 
@@ -50,7 +62,9 @@ Use two active cash/bank accounts in one company, each linked to a different act
 - [ ] Attempt to update/delete either posted transfer row: the immutability trigger must reject it.
 - [ ] Verify unauthorized users cannot post the transfer.
 - [ ] Verify the audit log contains the transfer group, both transaction IDs, journal ID, accounts, amount, and currency.
+- [ ] Run two simultaneous attempts against the same draft: at most one may post.
+- [ ] Run opposite-direction transfers between the same two accounts concurrently: no duplicate posting or unhandled deadlock.
 
 ## Current environment status
 
-The linked Supabase project migration history was inspected read-only. It currently contains migrations through `0026_expense_accounting_posting`; migrations 0027 and 0028 are not recorded there. No database migration has been applied by this change. Do not apply 0028 before 0027.
+The linked Supabase project migration history was inspected read-only. It currently contains migrations through `0026_expense_accounting_posting`; migrations 0027 and 0028 are not recorded there. No database migration has been applied by this change. Do not apply 0028 before 0027, and do not apply either to production before staging verification and separate approval.
