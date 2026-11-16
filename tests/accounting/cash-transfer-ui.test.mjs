@@ -15,7 +15,7 @@ test("cash transfer drafts are created as transfer_out without posting side effe
 });
 
 test("cash transfer posting calls the atomic database RPC with source and destination", () => {
-  assert.match(ui, /rpc\("post_cash_transfer",\{p_source_transaction_id:id,p_destination_cash_account_id:destination\}\)/i);
+  assert.match(ui, /rpc\("post_cash_transfer",\{p_source_transaction_id:id,p_destination_cash_account_id:destination\.id\}\)/i);
   assert.match(ui, /row\.cash_account_id/i);
   assert.match(ui, /row\.transfer_counter_account_id/i);
 });
@@ -35,4 +35,17 @@ test("cash transfer UI persists destination and posts using the saved draft valu
   assert.match(ui, /transfer_counter_account_id:destination\.id/i);
   assert.match(ui, /row\.transfer_counter_account_id/i);
   assert.match(ui, /select\("id,cash_account_id,transfer_counter_account_id,/i);
+});
+
+
+test("cash transfer UI falls back safely when the database migration is not installed", () => {
+  assert.match(ui, /transferColumnMissing/i);
+  assert.match(ui, /legacyCashTransactions/i);
+  assert.match(ui, /setCashTransferAvailable\(false\)/i);
+  assert.match(ui, /cashTransferAvailable\?<[\s\S]*?ميزة التحويل الداخلي غير متاحة حالياً/i);
+});
+
+test("cash transfer posting sends the destination account UUID, not the account object", () => {
+  assert.match(ui, /p_destination_cash_account_id:destination\.id/i);
+  assert.doesNotMatch(ui, /p_destination_cash_account_id:destination\}/i);
 });
