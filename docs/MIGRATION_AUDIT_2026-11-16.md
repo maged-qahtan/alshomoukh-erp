@@ -36,6 +36,21 @@
 
 **تنبيه:** عدم ظهور الاسم في سجل الترحيلات لا يثبت وحده أن أثر SQL غير موجود في قاعدة البيانات؛ قد تكون التغييرات قد وصلت بآلية أخرى أو ضمن ترحيل مختلف. يلزم فحص كتالوج PostgreSQL والدوال والسياسات ذات الصلة قبل اتخاذ قرار.
 
+## فحص كتالوج PostgreSQL للدوال
+
+تم إجراء استعلام قراءة فقط على `pg_proc` و`pg_get_functiondef` للدوال الست التي تنشئها الملفات الشقيقة. **الدوال الست موجودة فعلياً في قاعدة الإنتاج**:
+
+- `update_draft_journal_entry(p_entry_id uuid, p_entry_date date, p_description text, p_lines jsonb)`
+- `save_opening_balance_draft(p_company_id uuid, p_fiscal_period_id uuid, p_lines jsonb)`
+- `close_fiscal_period(p_fiscal_period_id uuid)`
+- `post_journal_entry(p_entry_id uuid, p_user_id uuid)`
+- `get_fiscal_year_close_preview(p_fiscal_period_id uuid)`
+- `create_next_fiscal_year_opening_draft(p_closed_period_id uuid, p_retained_earnings_account_id uuid, p_new_period_name text)`
+
+جميعها ظهرت كدوال `SECURITY INVOKER` (أي `prosecdef = false`) وبـ `search_path` محدد. هذا يثبت وجود الدوال الحالية فقط؛ ولا يثبت أن تعريفها مطابق بايتاً لملفات migrations الشقيقة أو أن جميع ACL والسياسات المرتبطة بها متطابقة.
+
+**الاستنتاج العملي:** لا تُشغّل الملفات الست لمجرد غياب أسمائها من سجل migrations؛ قد تعيد تعريف دوال موجودة. يجب مقارنة التعريفات والـ grants والسياسات مع ملفات المصدر أولاً.
+
 ## إجراء آمن موصى به
 
 1. تجميد تطبيق أي ملفات غير مسجلة على الإنتاج.
