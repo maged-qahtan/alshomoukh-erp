@@ -10,12 +10,13 @@ type Account = { id: string; code: string; name_ar: string; account_class: strin
 type Entry = { id: string; entry_number: number | null; entry_date: string; description: string; status: string; posted_at: string | null };
 type DraftLine = { account_id: string; debit: string; credit: string; description: string };
 
+const EXPECTED_SUPABASE_URL = "https://fvmdatbwkmwbhoiuzbgn.supabase.co";
 const today = () => new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Riyadh" }).format(new Date());
 const money = (value: number) => new Intl.NumberFormat("ar-SA", { style: "currency", currency: "SAR", minimumFractionDigits: 2 }).format(value);
 const dateLabel = (value: string) => new Intl.DateTimeFormat("ar-SA", { dateStyle: "medium", timeZone: "Asia/Riyadh" }).format(new Date(value + "T12:00:00"));
 
 export default function AutoFinanceDashboard() {
-  const configured = Boolean(process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY);
+  const configured = Boolean(process.env.NEXT_PUBLIC_SUPABASE_URL?.replace(/\\/+$/, "") === EXPECTED_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY);
   const supabase = useMemo(() => configured ? createClient() : null, [configured]);
   const [user, setUser] = useState<User | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
