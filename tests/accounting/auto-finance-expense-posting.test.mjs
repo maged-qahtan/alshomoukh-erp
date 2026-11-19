@@ -6,6 +6,10 @@ const posting = await readFile(
   new URL("../../database/auto-finance-migrations/20261119162719_add_atomic_daily_expense_posting.sql", import.meta.url),
   "utf8",
 );
+const validation = await readFile(
+  new URL("../../database/auto-finance-migrations/20261119163037_validate_daily_expense_payment_accounts.sql", import.meta.url),
+  "utf8",
+);
 const guard = await readFile(
   new URL("../../database/auto-finance-migrations/20261119162824_guard_posted_daily_expenses.sql", import.meta.url),
   "utf8",
@@ -29,8 +33,10 @@ test("daily expense posting creates a balanced journal and posts atomically", ()
 test("expense posting validates branch, ledger classes, amount, and payment method", () => {
   assert.match(posting, /b\.company_id=p_company_id and b\.is_active/i);
   assert.match(posting, /'expense','cost_of_revenue','other_expense'/i);
-  assert.match(posting, /p_amount<=0/i);
+  assert.match(posting, /p_amount\s*<=\s*0/i);
   assert.match(posting, /'cash','bank','credit','other'/i);
+  assert.match(validation, /v_payment_class not in \('asset','liability','equity'\)/i);
+  assert.match(validation, /p_payment_method='bank' and v_payment_class<>'asset'/i);
 });
 
 test("posted daily expenses cannot be changed or deleted or posted directly", () => {
