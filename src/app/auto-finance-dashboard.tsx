@@ -10,7 +10,6 @@ type Account = { id: string; code: string; name_ar: string; account_class: strin
 type Entry = { id: string; entry_number: number | null; entry_date: string; description: string; status: string; posted_at: string | null };
 type DraftLine = { account_id: string; debit: string; credit: string; description: string };
 
-const COMPANY_ID = "ba142479-7755-455c-8a4e-a661473a136e";
 const today = () => new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Riyadh" }).format(new Date());
 const money = (value: number) => new Intl.NumberFormat("ar-SA", { style: "currency", currency: "SAR", minimumFractionDigits: 2 }).format(value);
 const dateLabel = (value: string) => new Intl.DateTimeFormat("ar-SA", { dateStyle: "medium", timeZone: "Asia/Riyadh" }).format(new Date(value + "T12:00:00"));
@@ -57,19 +56,19 @@ export default function AutoFinanceDashboard() {
     if (!supabase || !user) return;
     setBusy(true);
     setNotice("");
-    const { data: membership, error: membershipError } = await supabase
+    const { data: memberships, error: membershipError } = await supabase
       .from("company_members")
       .select("company_id,role")
       .eq("user_id", user.id)
       .eq("is_active", true)
-      .eq("company_id", COMPANY_ID)
-      .maybeSingle();
+      .limit(2);
+    const membership = memberships?.length === 1 ? memberships[0] : null;
     if (membershipError) {
       setNotice("تعذر التحقق من ارتباط الحساب بالشركة. لا يمكن عرض البيانات.");
       setCompany(null); setBusy(false); return;
     }
     if (!membership) {
-      setNotice("هذا الحساب غير مرتبط بشركة «اصيل». لن يتم عرض أي بيانات. تواصل مع مالك النظام لإتمام الربط.");
+      setNotice("هذا الحساب غير مرتبط بشركة نشطة واحدة. لن يتم عرض أي بيانات حتى يتم ربطه بالشركة الصحيحة.");
       setCompany(null); setAccounts([]); setEntries([]); setTotals({ debit: 0, credit: 0, posted: 0, drafts: 0 }); setBusy(false); return;
     }
     const [companyResult, accountsResult, entriesResult] = await Promise.all([
