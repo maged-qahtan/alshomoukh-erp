@@ -1,5 +1,5 @@
-import AutoFinanceDashboard from "./auto-finance-dashboard";
+import Dashboard from "./dashboard";
 
 export default function Home() {
-  return <AutoFinanceDashboard />;
+  return <Dashboard />;
 }
