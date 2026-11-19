@@ -8,6 +8,7 @@ import "./auto-finance.css";
 type Company = { id: string; display_name: string | null; legal_name: string; currency_code: string; timezone: string };
 type Account = { id: string; code: string; name_ar: string; account_class: string; normal_balance: string; is_posting: boolean; is_active: boolean };
 type Entry = { id: string; entry_number: number | null; entry_date: string; description: string; status: string; posted_at: string | null };
+type FiscalPeriod = { id: string; name: string; start_date: string; end_date: string };
 type DraftLine = { account_id: string; debit: string; credit: string; description: string };
 
 const EXPECTED_SUPABASE_URL = "https://fvmdatbwkmwbhoiuzbgn.supabase.co";
@@ -25,6 +26,9 @@ export default function AutoFinanceDashboard() {
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState("");
   const [company, setCompany] = useState<Company | null>(null);
+  const [fiscalPeriods, setFiscalPeriods] = useState<FiscalPeriod[]>([]);
+  const [hasFiscalYears, setHasFiscalYears] = useState(false);
+  const [fiscalPeriodId, setFiscalPeriodId] = useState("");
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [entries, setEntries] = useState<Entry[]>([]);
   const [totals, setTotals] = useState({ debit: 0, credit: 0, posted: 0, drafts: 0 });
@@ -66,22 +70,28 @@ export default function AutoFinanceDashboard() {
     const membership = memberships?.length === 1 ? memberships[0] : null;
     if (membershipError) {
       setNotice("تعذر التحقق من ارتباط الحساب بالشركة. لا يمكن عرض البيانات.");
-      setCompany(null); setBusy(false); return;
+      setCompany(null); setAccounts([]); setEntries([]); setFiscalPeriods([]); setHasFiscalYears(false); setFiscalPeriodId(""); setBusy(false); return;
     }
     if (!membership) {
       setNotice("هذا الحساب غير مرتبط بشركة نشطة واحدة. لن يتم عرض أي بيانات حتى يتم ربطه بالشركة الصحيحة.");
-      setCompany(null); setAccounts([]); setEntries([]); setTotals({ debit: 0, credit: 0, posted: 0, drafts: 0 }); setBusy(false); return;
+      setCompany(null); setAccounts([]); setEntries([]); setFiscalPeriods([]); setHasFiscalYears(false); setFiscalPeriodId(""); setTotals({ debit: 0, credit: 0, posted: 0, drafts: 0 }); setBusy(false); return;
     }
-    const [companyResult, accountsResult, entriesResult] = await Promise.all([
+    const [companyResult, accountsResult, entriesResult, fiscalYearsResult, fiscalPeriodsResult] = await Promise.all([
       supabase.from("companies").select("id,display_name,legal_name,currency_code,timezone").eq("id", membership.company_id).single(),
       supabase.from("accounts").select("id,code,name_ar,account_class,normal_balance,is_posting,is_active").eq("company_id", membership.company_id).order("code"),
       supabase.from("journal_entries").select("id,entry_number,entry_date,description,status,posted_at").eq("company_id", membership.company_id).order("entry_date", { ascending: false }).limit(100),
+      supabase.from("fiscal_years").select("id").eq("company_id", membership.company_id).limit(1),
+      supabase.from("fiscal_periods").select("id,name,start_date,end_date").eq("company_id", membership.company_id).eq("status", "open").order("start_date"),
     ]);
-    if (companyResult.error || accountsResult.error || entriesResult.error) {
+    if (companyResult.error || accountsResult.error || entriesResult.error || fiscalYearsResult.error || fiscalPeriodsResult.error) {
       setNotice("تعذر تحميل مساحة العمل. تحقق من سياسات الوصول ثم أعد المحاولة.");
       setBusy(false); return;
     }
     setCompany(companyResult.data as Company);
+    setHasFiscalYears((fiscalYearsResult.data ?? []).length > 0);
+    const openPeriods = (fiscalPeriodsResult.data ?? []) as FiscalPeriod[];
+    setFiscalPeriods(openPeriods);
+    setFiscalPeriodId((current) => openPeriods.some((period) => period.id === current) ? current : "");
     setAccounts((accountsResult.data ?? []) as Account[]);
     const entryRows = (entriesResult.data ?? []) as Entry[];
     setEntries(entryRows);
@@ -101,7 +111,7 @@ export default function AutoFinanceDashboard() {
     setBusy(false);
   }, [supabase, user]);
 
-  useEffect(() => { if (user) void refresh(); else { setCompany(null); setAccounts([]); setEntries([]); } }, [user, refresh]);
+  useEffect(() => { if (user) void refresh(); else { setCompany(null); setAccounts([]); setEntries([]); setFiscalPeriods([]); setHasFiscalYears(false); setFiscalPeriodId(""); } }, [user, refresh]);
 
   async function signIn(event: FormEvent) {
     event.preventDefault();
@@ -142,6 +152,7 @@ export default function AutoFinanceDashboard() {
     if (!supabase || !company || !user) return;
     if (!description.trim()) { setNotice("أدخل بيان القيد."); return; }
     if (lines.length < 2 || !balanced) { setNotice("القيد غير متوازن. يجب أن يتساوى إجمالي المدين والدائن."); return; }
+    if (post && hasFiscalYears && !fiscalPeriodId) { setNotice("اختر فترة مالية مفتوحة قبل ترحيل القيد."); return; }
     const validLines = lines.map((line) => ({
       account_id: line.account_id,
       debit: Number(line.debit) || 0,
@@ -159,6 +170,7 @@ export default function AutoFinanceDashboard() {
     const { data: entryId, error: createError } = await supabase.rpc("create_journal_entry_draft", {
       p_company_id: company.id,
       p_branch_id: branchResult.data?.id ?? null,
+      p_fiscal_period_id: fiscalPeriodId || null,
       p_entry_date: entryDate,
       p_description: description.trim(),
       p_lines: validLines,
@@ -268,7 +280,7 @@ export default function AutoFinanceDashboard() {
             <div className="af-page-heading"><div><span className="af-eyebrow">المحاسبة العامة</span><h1>القيود اليومية</h1><p>إدارة القيود ومراجعة حالتها قبل الترحيل.</p></div><button className="af-primary" onClick={() => setShowEntryForm((value) => !value)}>＋ قيد جديد</button></div>
             {showEntryForm && <section className="af-panel af-entry-form"><div className="af-panel-head"><div><h2>إنشاء قيد يومية</h2><p>يجب أن يتساوى المدين والدائن قبل الحفظ أو الترحيل.</p></div><button className="af-icon-button" onClick={() => setShowEntryForm(false)}>×</button></div>
               <form onSubmit={(event) => { event.preventDefault(); void saveJournal(false); }}>
-                <div className="af-form-grid"><label>تاريخ القيد<input type="date" required value={entryDate} onChange={(e) => setEntryDate(e.target.value)} /></label><label className="af-wide">البيان<input required value={description} onChange={(e) => setDescription(e.target.value)} placeholder="وصف مختصر للعملية المالية" /></label></div>
+                <div className="af-form-grid"><label>تاريخ القيد<input type="date" required value={entryDate} onChange={(e) => setEntryDate(e.target.value)} /></label>{hasFiscalYears && <label>الفترة المالية<select value={fiscalPeriodId} onChange={(e) => setFiscalPeriodId(e.target.value)}><option value="">اختر فترة مفتوحة</option>{fiscalPeriods.map((period) => <option key={period.id} value={period.id}>{period.name} ({period.start_date} – {period.end_date})</option>)}</select></label>}<label className="af-wide">البيان<input required value={description} onChange={(e) => setDescription(e.target.value)} placeholder="وصف مختصر للعملية المالية" /></label></div>{hasFiscalYears && fiscalPeriods.length === 0 && <p className="af-inline-notice">لا توجد فترة مالية مفتوحة حالياً. يمكنك حفظ مسودة، لكن لن يمكن ترحيلها حتى فتح فترة مناسبة.</p>}
                 <div className="af-table-wrap"><table className="af-lines-table"><thead><tr><th>الحساب</th><th>البيان</th><th>مدين (ر.س)</th><th>دائن (ر.س)</th><th></th></tr></thead><tbody>{lines.map((line, index) => <tr key={index}><td><select required value={line.account_id} onChange={(e) => updateLine(index, "account_id", e.target.value)}><option value="">اختر الحساب</option>{postingAccounts.map((account) => <option key={account.id} value={account.id}>{account.code} — {account.name_ar}</option>)}</select></td><td><input value={line.description} onChange={(e) => updateLine(index, "description", e.target.value)} placeholder="اختياري" /></td><td><input type="number" min="0" step="0.01" value={line.debit} onChange={(e) => updateLine(index, "debit", e.target.value)} /></td><td><input type="number" min="0" step="0.01" value={line.credit} onChange={(e) => updateLine(index, "credit", e.target.value)} /></td><td><button type="button" className="af-remove-line" onClick={() => setLines((current) => current.length > 2 ? current.filter((_, i) => i !== index) : current)}>×</button></td></tr>)}</tbody></table></div>
                 <button type="button" className="af-add-line" onClick={() => setLines((current) => [...current, { account_id: "", debit: "", credit: "", description: "" }])}>＋ إضافة سطر</button>
                 <div className="af-entry-totals"><span>إجمالي المدين <b>{money(debitTotal / 100)}</b></span><span>إجمالي الدائن <b>{money(creditTotal / 100)}</b></span><span className={balanced ? "balanced" : "unbalanced"}>{balanced ? "✓ القيد متوازن" : "• القيد غير متوازن"}</span></div>
