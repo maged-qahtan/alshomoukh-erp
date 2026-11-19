@@ -138,8 +138,7 @@ export default function AutoFinanceDashboard() {
   const balanced = debitTotal > 0 && debitTotal === creditTotal;
   const postingAccounts = accounts.filter((account) => account.is_active && account.is_posting);
 
-  async function saveJournal(event: FormEvent, post: boolean) {
-    event.preventDefault();
+  async function saveJournal(post: boolean) {
     if (!supabase || !company || !user) return;
     if (!description.trim()) { setNotice("أدخل بيان القيد."); return; }
     if (lines.length < 2 || !balanced) { setNotice("القيد غير متوازن. يجب أن يتساوى إجمالي المدين والدائن."); return; }
@@ -153,26 +152,33 @@ export default function AutoFinanceDashboard() {
       setNotice("اختر حساباً لكل سطر وأدخل مبلغاً في جهة واحدة فقط."); return;
     }
     setBusy(true); setNotice("");
-    const branchResult = await supabase.from("branches").select("id").eq("company_id", company.id).eq("is_active", true).order("code").limit(1).maybeSingle();
+    const branchResult = await supabase.from("branches").select("id")
+      .eq("company_id", company.id).eq("is_active", true).order("code").limit(1).maybeSingle();
     if (branchResult.error) { setBusy(false); setNotice("تعذر التحقق من الفرع."); return; }
-    const { data: header, error: headerError } = await supabase.from("journal_entries").insert({
-      company_id: company.id, branch_id: branchResult.data?.id ?? null, entry_date: entryDate,
-      description: description.trim(), source_type: "manual", status: "draft", created_by: user.id,
-    }).select("id").single();
-    if (headerError || !header) { setBusy(false); setNotice(headerError?.message ?? "تعذر إنشاء القيد."); return; }
-    const { error: linesError } = await supabase.from("journal_lines").insert(validLines.map((line, index) => ({
-      company_id: company.id, journal_entry_id: header.id, line_number: index + 1,
-      account_id: line.account_id, debit: line.debit, credit: line.credit, description: line.description,
-    })));
-    if (linesError) {
-      await supabase.from("journal_entries").delete().eq("company_id", company.id).eq("id", header.id);
-      setBusy(false); setNotice(linesError.message); return;
+
+    const { data: entryId, error: createError } = await supabase.rpc("create_journal_entry_draft", {
+      p_company_id: company.id,
+      p_branch_id: branchResult.data?.id ?? null,
+      p_entry_date: entryDate,
+      p_description: description.trim(),
+      p_lines: validLines,
+    });
+    if (createError || !entryId) {
+      setBusy(false);
+      setNotice(createError?.message ?? "تعذر إنشاء القيد.");
+      return;
     }
+
     if (post) {
-      const { error: postError } = await supabase.rpc("post_journal_entry", { p_company_id: company.id, p_entry_id: header.id });
+      const { error: postError } = await supabase.rpc("post_journal_entry", {
+        p_company_id: company.id,
+        p_entry_id: entryId,
+      });
       if (postError) {
-        setBusy(false); setNotice("حُفظ القيد كمسودة، لكن تعذر ترحيله: " + postError.message);
-        await refresh(); return;
+        setBusy(false);
+        setNotice("حُفظ القيد كاملاً كمسودة، لكن تعذر ترحيله: " + postError.message);
+        await refresh();
+        return;
       }
     }
     setDescription("");
@@ -261,12 +267,12 @@ export default function AutoFinanceDashboard() {
           {active === "journal" && <>
             <div className="af-page-heading"><div><span className="af-eyebrow">المحاسبة العامة</span><h1>القيود اليومية</h1><p>إدارة القيود ومراجعة حالتها قبل الترحيل.</p></div><button className="af-primary" onClick={() => setShowEntryForm((value) => !value)}>＋ قيد جديد</button></div>
             {showEntryForm && <section className="af-panel af-entry-form"><div className="af-panel-head"><div><h2>إنشاء قيد يومية</h2><p>يجب أن يتساوى المدين والدائن قبل الحفظ أو الترحيل.</p></div><button className="af-icon-button" onClick={() => setShowEntryForm(false)}>×</button></div>
-              <form onSubmit={(event) => void saveJournal(event, false)}>
+              <form onSubmit={(event) => { event.preventDefault(); void saveJournal(false); }}>
                 <div className="af-form-grid"><label>تاريخ القيد<input type="date" required value={entryDate} onChange={(e) => setEntryDate(e.target.value)} /></label><label className="af-wide">البيان<input required value={description} onChange={(e) => setDescription(e.target.value)} placeholder="وصف مختصر للعملية المالية" /></label></div>
                 <div className="af-table-wrap"><table className="af-lines-table"><thead><tr><th>الحساب</th><th>البيان</th><th>مدين (ر.س)</th><th>دائن (ر.س)</th><th></th></tr></thead><tbody>{lines.map((line, index) => <tr key={index}><td><select required value={line.account_id} onChange={(e) => updateLine(index, "account_id", e.target.value)}><option value="">اختر الحساب</option>{postingAccounts.map((account) => <option key={account.id} value={account.id}>{account.code} — {account.name_ar}</option>)}</select></td><td><input value={line.description} onChange={(e) => updateLine(index, "description", e.target.value)} placeholder="اختياري" /></td><td><input type="number" min="0" step="0.01" value={line.debit} onChange={(e) => updateLine(index, "debit", e.target.value)} /></td><td><input type="number" min="0" step="0.01" value={line.credit} onChange={(e) => updateLine(index, "credit", e.target.value)} /></td><td><button type="button" className="af-remove-line" onClick={() => setLines((current) => current.length > 2 ? current.filter((_, i) => i !== index) : current)}>×</button></td></tr>)}</tbody></table></div>
                 <button type="button" className="af-add-line" onClick={() => setLines((current) => [...current, { account_id: "", debit: "", credit: "", description: "" }])}>＋ إضافة سطر</button>
                 <div className="af-entry-totals"><span>إجمالي المدين <b>{money(debitTotal / 100)}</b></span><span>إجمالي الدائن <b>{money(creditTotal / 100)}</b></span><span className={balanced ? "balanced" : "unbalanced"}>{balanced ? "✓ القيد متوازن" : "• القيد غير متوازن"}</span></div>
-                <div className="af-form-actions"><button className="af-secondary" type="button" onClick={(event) => void saveJournal(event as unknown as FormEvent, false)} disabled={busy || !balanced}>حفظ كمسودة</button><button className="af-primary" type="button" onClick={(event) => void saveJournal(event as unknown as FormEvent, true)} disabled={busy || !balanced}>{busy ? "جارٍ الحفظ…" : "حفظ وترحيل القيد"}</button></div>
+                <div className="af-form-actions"><button className="af-secondary" type="button" onClick={() => void saveJournal(false)} disabled={busy || !balanced}>حفظ كمسودة</button><button className="af-primary" type="button" onClick={() => void saveJournal(true)} disabled={busy || !balanced}>{busy ? "جارٍ الحفظ…" : "حفظ وترحيل القيد"}</button></div>
               </form>
             </section>}
             <section className="af-panel"><div className="af-panel-head"><div><h2>سجل القيود</h2><p>{entries.length.toLocaleString("ar-SA")} قيد ضمن أحدث السجلات</p></div><button className="af-text-button" onClick={() => void refresh()} disabled={busy}>تحديث البيانات ↻</button></div>
