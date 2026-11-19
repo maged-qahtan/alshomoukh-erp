@@ -7,7 +7,7 @@ const posting = await readFile(
   "utf8",
 );
 const guard = await readFile(
-  new URL("../../database/auto-finance-migrations/20261119162800_guard_posted_daily_expenses.sql", import.meta.url),
+  new URL("../../database/auto-finance-migrations/20261119162824_guard_posted_daily_expenses.sql", import.meta.url),
   "utf8",
 );
 
