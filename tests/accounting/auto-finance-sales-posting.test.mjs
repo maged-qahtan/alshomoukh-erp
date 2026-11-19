@@ -28,7 +28,7 @@ test("daily sales use net tenders plus contra-revenue debits to balance gross re
 
 test("daily sales validate revenue allocations and company branch", () => {
   assert.match(posting, /v_allocated<>v_revenue/i);
-  assert.match(allocationGuard, /a\.normal_balance<>'credit'/i);
+  assert.match(allocationGuard, /a\.normal_balance\\s*<>\\s*'credit'/i);
   assert.match(posting, /a\.account_class<>'revenue'/i);
   assert.match(posting, /b\.company_id=p_company_id and b\.is_active/i);
   assert.match(posting, /insert into public\.daily_sale_allocations/i);
