@@ -42,6 +42,7 @@ The dedicated Supabase project currently records these migrations in its migrati
 - `support_fiscal_periods_in_journal_drafts`
 - `add_atomic_daily_expense_posting`
 - `guard_posted_daily_expenses`
+- `validate_daily_expense_payment_accounts`
 
 The latest hardening removes anonymous table grants, removes direct update privileges from journal tables,
 uses an atomic draft-creation RPC, and confines the privileged posting implementation to the non-exposed
