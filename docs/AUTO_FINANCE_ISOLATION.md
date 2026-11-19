@@ -25,6 +25,8 @@ The application deliberately displays a setup screen while the two public variab
 
 ## Database migrations
 
+AUTO-FINANCE-specific SQL changes live under `database/auto-finance-migrations/` and must only be applied to the dedicated AUTO-FINANCE Supabase project. They are intentionally kept separate from the legacy ERP migration chain.
+
 The dedicated Supabase project currently records these migrations in its migration history:
 
 - `initial_accounting_schema`
