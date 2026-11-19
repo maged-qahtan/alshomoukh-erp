@@ -376,7 +376,7 @@ export default function AutoFinanceDashboard() {
             </section>
           </>}
 
-          {active === "sales" && <AutoFinanceSales companyId={company.id} accounts={postingAccounts.filter((account) => account.account_class === "revenue")} fiscalPeriods={fiscalPeriods} hasFiscalYears={hasFiscalYears} />}
+          {active === "sales" && <AutoFinanceSales companyId={company.id} accounts={postingAccounts.filter((account) => account.account_class === "revenue" && account.normal_balance === "credit")} fiscalPeriods={fiscalPeriods} hasFiscalYears={hasFiscalYears} />}
 
           {active === "accounts" && <>
             <div className="af-page-heading"><div><span className="af-eyebrow">الإعدادات المحاسبية</span><h1>دليل الحسابات</h1><p>شجرة الحسابات الخاصة بشركة {companyLabel}.</p></div><span className="af-count-pill">{accounts.length} حساب</span></div>
