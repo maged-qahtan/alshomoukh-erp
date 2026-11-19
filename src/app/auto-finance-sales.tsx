@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
 import { createClient } from "@/lib/supabase/client";
 
-type Account = { id: string; code: string; name_ar: string; account_class: string; is_posting: boolean; is_active: boolean };
+type Account = { id: string; code: string; name_ar: string; account_class: string; normal_balance: string; is_posting: boolean; is_active: boolean };
 type Period = { id: string; name: string; start_date: string; end_date: string };
 type Sale = { id: string; sales_date: string; mada_gross: number; cash_gross: number; tabby_gross: number; tamara_gross: number; bank_transfer_gross: number; other_gross: number; discounts: number; returns: number; status: string };
 type Allocation = { account_id: string; amount: string };
