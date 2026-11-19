@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react
 import type { User } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/client";
 import "./auto-finance.css";
+import AutoFinanceSales from "./auto-finance-sales";
 
 type Company = { id: string; display_name: string | null; legal_name: string; currency_code: string; timezone: string };
 type Account = { id: string; code: string; name_ar: string; account_class: string; normal_balance: string; is_posting: boolean; is_active: boolean };
@@ -33,7 +34,7 @@ export default function AutoFinanceDashboard() {
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [entries, setEntries] = useState<Entry[]>([]);
   const [totals, setTotals] = useState({ debit: 0, credit: 0, posted: 0, drafts: 0 });
-  const [active, setActive] = useState<"home" | "journal" | "expenses" | "accounts">("home");
+  const [active, setActive] = useState<"home" | "journal" | "expenses" | "sales" | "accounts">("home");
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [showExpenseForm, setShowExpenseForm] = useState(false);
   const [expenseDate, setExpenseDate] = useState(today());
@@ -304,13 +305,14 @@ export default function AutoFinanceDashboard() {
           <button className={active === "home" ? "active" : ""} onClick={() => setActive("home")}><span>▦</span> نظرة عامة</button>
           <button className={active === "journal" ? "active" : ""} onClick={() => setActive("journal")}><span>≡</span> القيود اليومية</button>
           <button className={active === "expenses" ? "active" : ""} onClick={() => setActive("expenses")}><span>↘</span> المصروفات اليومية</button>
+          <button className={active === "sales" ? "active" : ""} onClick={() => setActive("sales")}><span>↗</span> المبيعات اليومية</button>
           <button className={active === "accounts" ? "active" : ""} onClick={() => setActive("accounts")}><span>⊞</span> دليل الحسابات</button>
         </nav>
         <div className="af-sidebar-bottom"><div className="af-secure"><span>✓</span><div><b>بياناتك محمية</b><small>عزل على مستوى قاعدة البيانات</small></div></div><button onClick={() => void signOut()} disabled={busy} className="af-logout">↪ تسجيل الخروج</button></div>
       </aside>
 
       <section className="af-main">
-        <header className="af-topbar"><div><span className="af-breadcrumb">مساحة العمل</span><b>{active === "home" ? "نظرة عامة" : active === "journal" ? "القيود اليومية" : active === "expenses" ? "المصروفات اليومية" : "دليل الحسابات"}</b></div><div className="af-top-user"><span className="af-live-dot" /> متصل بأمان <span className="af-avatar">{(user.email || "A").slice(0,1).toUpperCase()}</span></div></header>
+        <header className="af-topbar"><div><span className="af-breadcrumb">مساحة العمل</span><b>{active === "home" ? "نظرة عامة" : active === "journal" ? "القيود اليومية" : active === "expenses" ? "المصروفات اليومية" : active === "sales" ? "المبيعات اليومية" : "دليل الحسابات"}</b></div><div className="af-top-user"><span className="af-live-dot" /> متصل بأمان <span className="af-avatar">{(user.email || "A").slice(0,1).toUpperCase()}</span></div></header>
         <div className="af-content">
           {notice && <div className="af-inline-notice">{notice}<button onClick={() => setNotice("")}>×</button></div>}
           {active === "home" && <>
@@ -373,6 +375,8 @@ export default function AutoFinanceDashboard() {
               {expenses.length ? <div className="af-table-wrap"><table><thead><tr><th>التاريخ</th><th>البيان</th><th>حساب المصروف</th><th>طريقة الدفع</th><th>المبلغ</th><th>الحالة</th></tr></thead><tbody>{expenses.map((expense) => { const account = accounts.find((a) => a.id === expense.expense_account_id); return <tr key={expense.id}><td>{dateLabel(expense.expense_date)}</td><td>{expense.description}</td><td>{account ? account.code + " — " + account.name_ar : "—"}</td><td>{({cash:"نقداً",bank:"بنك",credit:"آجل",other:"أخرى"} as Record<string,string>)[expense.payment_method] ?? expense.payment_method}</td><td className="af-code">{money(Number(expense.amount))}</td><td><span className="af-status posted">مرحّل</span></td></tr>; })}</tbody></table></div> : <div className="af-empty"><b>لا توجد مصروفات مسجلة</b><p>ابدأ بتسجيل أول مصروف تشغيلي.</p></div>}
             </section>
           </>}
+
+          {active === "sales" && <AutoFinanceSales companyId={company.id} accounts={postingAccounts.filter((account) => account.account_class === "revenue")} fiscalPeriods={fiscalPeriods} hasFiscalYears={hasFiscalYears} />}
 
           {active === "accounts" && <>
             <div className="af-page-heading"><div><span className="af-eyebrow">الإعدادات المحاسبية</span><h1>دليل الحسابات</h1><p>شجرة الحسابات الخاصة بشركة {companyLabel}.</p></div><span className="af-count-pill">{accounts.length} حساب</span></div>
