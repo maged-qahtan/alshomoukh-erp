@@ -29,7 +29,7 @@ begin
  select count(*) into v_bad from jsonb_to_recordset(p_allocations) x(account_id uuid,amount numeric)
  left join public.accounts a on a.id=x.account_id and a.company_id=p_company_id
  where x.account_id is null or x.amount is null or x.amount<=0 or x.amount<>round(x.amount,2)
-  or a.id is null or a.is_active is not true or a.is_posting is not true or a.account_class<>'revenue' or a.normal_balance<>'credit';
+  or a.id is null or a.is_active is not true or a.is_posting is not true or a.account_class<>'revenue';
  if v_bad>0 then raise exception 'Each allocation must use an active revenue posting account and a positive amount' using errcode='23514'; end if;
  select max(id) filter(where code='1180'),max(id) filter(where code='1110'),
   max(id) filter(where code='1181'),max(id) filter(where code='1182'),
