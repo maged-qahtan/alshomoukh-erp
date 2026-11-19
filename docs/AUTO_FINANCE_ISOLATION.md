@@ -38,6 +38,8 @@ The dedicated Supabase project currently records these migrations in its migrati
 - `fix_atomic_draft_json_line_order`
 - `index_uncovered_foreign_keys`
 - `support_fiscal_periods_in_journal_drafts`
+- `add_atomic_daily_expense_posting`
+- `guard_posted_daily_expenses`
 
 The latest hardening removes anonymous table grants, removes direct update privileges from journal tables,
 uses an atomic draft-creation RPC, and confines the privileged posting implementation to the non-exposed
