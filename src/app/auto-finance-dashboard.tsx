@@ -9,6 +9,7 @@ type Company = { id: string; display_name: string | null; legal_name: string; cu
 type Account = { id: string; code: string; name_ar: string; account_class: string; normal_balance: string; is_posting: boolean; is_active: boolean };
 type Entry = { id: string; entry_number: number | null; entry_date: string; description: string; status: string; posted_at: string | null };
 type FiscalPeriod = { id: string; name: string; start_date: string; end_date: string };
+type Expense = { id: string; expense_date: string; amount: number; description: string; payment_method: string; status: string; expense_account_id: string };
 type DraftLine = { account_id: string; debit: string; credit: string; description: string };
 
 const EXPECTED_SUPABASE_URL = "https://fvmdatbwkmwbhoiuzbgn.supabase.co";
@@ -32,7 +33,17 @@ export default function AutoFinanceDashboard() {
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [entries, setEntries] = useState<Entry[]>([]);
   const [totals, setTotals] = useState({ debit: 0, credit: 0, posted: 0, drafts: 0 });
-  const [active, setActive] = useState<"home" | "journal" | "accounts">("home");
+  const [active, setActive] = useState<"home" | "journal" | "expenses" | "accounts">("home");
+  const [expenses, setExpenses] = useState<Expense[]>([]);
+  const [showExpenseForm, setShowExpenseForm] = useState(false);
+  const [expenseDate, setExpenseDate] = useState(today());
+  const [expenseDescription, setExpenseDescription] = useState("");
+  const [expenseAmount, setExpenseAmount] = useState("");
+  const [expenseAccountId, setExpenseAccountId] = useState("");
+  const [expensePaymentMethod, setExpensePaymentMethod] = useState("cash");
+  const [expensePaymentAccountId, setExpensePaymentAccountId] = useState("");
+  const [expenseReference, setExpenseReference] = useState("");
+  const [expenseNotes, setExpenseNotes] = useState("");
   const [entryDate, setEntryDate] = useState(today());
   const [description, setDescription] = useState("");
   const [lines, setLines] = useState<DraftLine[]>([
@@ -76,14 +87,15 @@ export default function AutoFinanceDashboard() {
       setNotice("هذا الحساب غير مرتبط بشركة نشطة واحدة. لن يتم عرض أي بيانات حتى يتم ربطه بالشركة الصحيحة.");
       setCompany(null); setAccounts([]); setEntries([]); setFiscalPeriods([]); setHasFiscalYears(false); setFiscalPeriodId(""); setTotals({ debit: 0, credit: 0, posted: 0, drafts: 0 }); setBusy(false); return;
     }
-    const [companyResult, accountsResult, entriesResult, fiscalYearsResult, fiscalPeriodsResult] = await Promise.all([
+    const [companyResult, accountsResult, entriesResult, fiscalYearsResult, fiscalPeriodsResult, expensesResult] = await Promise.all([
       supabase.from("companies").select("id,display_name,legal_name,currency_code,timezone").eq("id", membership.company_id).single(),
       supabase.from("accounts").select("id,code,name_ar,account_class,normal_balance,is_posting,is_active").eq("company_id", membership.company_id).order("code"),
       supabase.from("journal_entries").select("id,entry_number,entry_date,description,status,posted_at").eq("company_id", membership.company_id).order("entry_date", { ascending: false }).limit(100),
       supabase.from("fiscal_years").select("id").eq("company_id", membership.company_id).limit(1),
       supabase.from("fiscal_periods").select("id,name,start_date,end_date").eq("company_id", membership.company_id).eq("status", "open").order("start_date"),
+      supabase.from("daily_expenses").select("id,expense_date,amount,description,payment_method,status,expense_account_id").eq("company_id", membership.company_id).order("expense_date", { ascending: false }).limit(100),
     ]);
-    if (companyResult.error || accountsResult.error || entriesResult.error || fiscalYearsResult.error || fiscalPeriodsResult.error) {
+    if (companyResult.error || accountsResult.error || entriesResult.error || fiscalYearsResult.error || fiscalPeriodsResult.error || expensesResult.error) {
       setNotice("تعذر تحميل مساحة العمل. تحقق من سياسات الوصول ثم أعد المحاولة.");
       setBusy(false); return;
     }
@@ -95,6 +107,7 @@ export default function AutoFinanceDashboard() {
     setAccounts((accountsResult.data ?? []) as Account[]);
     const entryRows = (entriesResult.data ?? []) as Entry[];
     setEntries(entryRows);
+    setExpenses((expensesResult.data ?? []) as Expense[]);
     const { data: summaryRows, error: summaryError } = await supabase.rpc("company_dashboard_summary", { p_company_id: membership.company_id });
     if (summaryError) {
       setNotice("تم تحميل البيانات الأساسية، لكن تعذر احتساب ملخص الأرصدة.");
@@ -112,6 +125,50 @@ export default function AutoFinanceDashboard() {
   }, [supabase, user]);
 
   useEffect(() => { if (user) void refresh(); else { setCompany(null); setAccounts([]); setEntries([]); setFiscalPeriods([]); setHasFiscalYears(false); setFiscalPeriodId(""); } }, [user, refresh]);
+
+  async function saveExpense(event: FormEvent) {
+    event.preventDefault();
+    if (!supabase || !company || !user) return;
+    const amount = Number(expenseAmount);
+    if (!expenseDescription.trim() || !expenseAccountId || !Number.isFinite(amount) || amount <= 0) {
+      setNotice("أدخل وصف المصروف ومبلغه واختر حساب المصروف.");
+      return;
+    }
+    if (hasFiscalYears && !fiscalPeriodId) {
+      setNotice("اختر فترة مالية مفتوحة قبل تسجيل المصروف.");
+      return;
+    }
+    if (["bank", "other"].includes(expensePaymentMethod) && !expensePaymentAccountId) {
+      setNotice("اختر حساب الدفع المناسب.");
+      return;
+    }
+    setBusy(true); setNotice("");
+    const branchResult = await supabase.from("branches").select("id")
+      .eq("company_id", company.id).eq("is_active", true).order("code").limit(1).maybeSingle();
+    if (branchResult.error || !branchResult.data?.id) {
+      setBusy(false); setNotice("تعذر تحديد الفرع النشط للشركة."); return;
+    }
+    const { error } = await supabase.rpc("record_daily_expense", {
+      p_company_id: company.id,
+      p_branch_id: branchResult.data.id,
+      p_expense_date: expenseDate,
+      p_expense_account_id: expenseAccountId,
+      p_amount: Math.round(amount * 100) / 100,
+      p_payment_method: expensePaymentMethod,
+      p_cash_bank_account_id: ["bank", "other"].includes(expensePaymentMethod) ? expensePaymentAccountId : null,
+      p_description: expenseDescription.trim(),
+      p_reference_number: expenseReference.trim() || null,
+      p_notes: expenseNotes.trim() || null,
+      p_fiscal_period_id: fiscalPeriodId || null,
+    });
+    setBusy(false);
+    if (error) { setNotice("تعذر تسجيل المصروف: " + error.message); return; }
+    setExpenseDescription(""); setExpenseAmount(""); setExpenseAccountId("");
+    setExpensePaymentMethod("cash"); setExpensePaymentAccountId(""); setExpenseReference(""); setExpenseNotes("");
+    setShowExpenseForm(false);
+    setNotice("تم تسجيل المصروف وترحيل قيده المحاسبي بنجاح.");
+    await refresh();
+  }
 
   async function signIn(event: FormEvent) {
     event.preventDefault();
@@ -246,13 +303,14 @@ export default function AutoFinanceDashboard() {
         <nav className="af-nav">
           <button className={active === "home" ? "active" : ""} onClick={() => setActive("home")}><span>▦</span> نظرة عامة</button>
           <button className={active === "journal" ? "active" : ""} onClick={() => setActive("journal")}><span>≡</span> القيود اليومية</button>
+          <button className={active === "expenses" ? "active" : ""} onClick={() => setActive("expenses")}><span>↘</span> المصروفات اليومية</button>
           <button className={active === "accounts" ? "active" : ""} onClick={() => setActive("accounts")}><span>⊞</span> دليل الحسابات</button>
         </nav>
         <div className="af-sidebar-bottom"><div className="af-secure"><span>✓</span><div><b>بياناتك محمية</b><small>عزل على مستوى قاعدة البيانات</small></div></div><button onClick={() => void signOut()} disabled={busy} className="af-logout">↪ تسجيل الخروج</button></div>
       </aside>
 
       <section className="af-main">
-        <header className="af-topbar"><div><span className="af-breadcrumb">مساحة العمل</span><b>{active === "home" ? "نظرة عامة" : active === "journal" ? "القيود اليومية" : "دليل الحسابات"}</b></div><div className="af-top-user"><span className="af-live-dot" /> متصل بأمان <span className="af-avatar">{(user.email || "A").slice(0,1).toUpperCase()}</span></div></header>
+        <header className="af-topbar"><div><span className="af-breadcrumb">مساحة العمل</span><b>{active === "home" ? "نظرة عامة" : active === "journal" ? "القيود اليومية" : active === "expenses" ? "المصروفات اليومية" : "دليل الحسابات"}</b></div><div className="af-top-user"><span className="af-live-dot" /> متصل بأمان <span className="af-avatar">{(user.email || "A").slice(0,1).toUpperCase()}</span></div></header>
         <div className="af-content">
           {notice && <div className="af-inline-notice">{notice}<button onClick={() => setNotice("")}>×</button></div>}
           {active === "home" && <>
@@ -289,6 +347,30 @@ export default function AutoFinanceDashboard() {
             </section>}
             <section className="af-panel"><div className="af-panel-head"><div><h2>سجل القيود</h2><p>{entries.length.toLocaleString("ar-SA")} قيد ضمن أحدث السجلات</p></div><button className="af-text-button" onClick={() => void refresh()} disabled={busy}>تحديث البيانات ↻</button></div>
               {entries.length ? <div className="af-table-wrap"><table><thead><tr><th>رقم القيد</th><th>التاريخ</th><th>البيان</th><th>الحالة</th><th>تاريخ الترحيل</th></tr></thead><tbody>{entries.map((entry) => <tr key={entry.id}><td className="af-code">{entry.entry_number ?? "—"}</td><td>{dateLabel(entry.entry_date)}</td><td>{entry.description}</td><td><span className={"af-status " + (entry.status === "posted" ? "posted" : "draft")}>{entry.status === "posted" ? "مرحّل" : "مسودة"}</span></td><td>{entry.posted_at ? new Intl.DateTimeFormat("ar-SA", { dateStyle: "medium" }).format(new Date(entry.posted_at)) : "—"}</td></tr>)}</tbody></table></div> : <div className="af-empty"><b>لا توجد قيود مسجلة</b><p>ستظهر القيود هنا بعد إضافتها.</p></div>}
+            </section>
+          </>}
+
+          {active === "expenses" && <>
+            <div className="af-page-heading"><div><span className="af-eyebrow">الحركة التشغيلية</span><h1>المصروفات اليومية</h1><p>تسجيل المصروفات مع إنشاء وترحيل القيد المحاسبي بصورة ذرية.</p></div><button className="af-primary" onClick={() => setShowExpenseForm((value) => !value)}>＋ مصروف جديد</button></div>
+            {showExpenseForm && <section className="af-panel af-entry-form"><div className="af-panel-head"><div><h2>تسجيل مصروف</h2><p>سيُنشأ القيد المحاسبي ويُرحّل ضمن العملية نفسها.</p></div><button className="af-icon-button" onClick={() => setShowExpenseForm(false)}>×</button></div>
+              <form onSubmit={saveExpense}>
+                <div className="af-form-grid">
+                  <label>تاريخ المصروف<input type="date" required value={expenseDate} onChange={(e) => setExpenseDate(e.target.value)} /></label>
+                  {hasFiscalYears && <label>الفترة المالية<select required value={fiscalPeriodId} onChange={(e) => setFiscalPeriodId(e.target.value)}><option value="">اختر فترة مفتوحة</option>{fiscalPeriods.map((period) => <option key={period.id} value={period.id}>{period.name} ({period.start_date} – {period.end_date})</option>)}</select></label>}
+                  <label>حساب المصروف<select required value={expenseAccountId} onChange={(e) => setExpenseAccountId(e.target.value)}><option value="">اختر حساب المصروف</option>{postingAccounts.filter((a) => ["expense","cost_of_revenue","other_expense"].includes(a.account_class)).map((a) => <option key={a.id} value={a.id}>{a.code} — {a.name_ar}</option>)}</select></label>
+                  <label>المبلغ (ر.س)<input type="number" min="0.01" step="0.01" required value={expenseAmount} onChange={(e) => setExpenseAmount(e.target.value)} placeholder="0.00" /></label>
+                  <label>طريقة الدفع<select value={expensePaymentMethod} onChange={(e) => { setExpensePaymentMethod(e.target.value); setExpensePaymentAccountId(""); }}><option value="cash">نقداً — الصندوق الرئيسي</option><option value="bank">تحويل / بنك</option><option value="credit">آجل — ذمم الموردين</option><option value="other">حساب آخر</option></select></label>
+                  {["bank","other"].includes(expensePaymentMethod) && <label>حساب الدفع<select required value={expensePaymentAccountId} onChange={(e) => setExpensePaymentAccountId(e.target.value)}><option value="">اختر حساب الدفع</option>{postingAccounts.filter((a) => expensePaymentMethod === "bank" ? a.account_class === "asset" && a.code !== "1110" : true).map((a) => <option key={a.id} value={a.id}>{a.code} — {a.name_ar}</option>)}</select></label>}
+                  <label>رقم المرجع<input value={expenseReference} onChange={(e) => setExpenseReference(e.target.value)} placeholder="اختياري" /></label>
+                  <label className="af-wide">وصف المصروف<input required value={expenseDescription} onChange={(e) => setExpenseDescription(e.target.value)} placeholder="مثال: فاتورة كهرباء الورشة" /></label>
+                  <label className="af-wide">ملاحظات<textarea value={expenseNotes} onChange={(e) => setExpenseNotes(e.target.value)} rows={2} placeholder="ملاحظات إضافية (اختياري)" /></label>
+                </div>
+                {hasFiscalYears && fiscalPeriods.length === 0 && <p className="af-inline-notice">لا توجد فترة مالية مفتوحة؛ لا يمكن ترحيل المصروف حتى فتح فترة مناسبة.</p>}
+                <div className="af-form-actions"><button className="af-secondary" type="button" onClick={() => setShowExpenseForm(false)}>إلغاء</button><button className="af-primary" type="submit" disabled={busy || (hasFiscalYears && !fiscalPeriodId)}>{busy ? "جارٍ التسجيل…" : "حفظ المصروف وترحيله"}</button></div>
+              </form>
+            </section>}
+            <section className="af-panel"><div className="af-panel-head"><div><h2>سجل المصروفات</h2><p>{expenses.length.toLocaleString("ar-SA")} مصروف ضمن أحدث السجلات</p></div><button className="af-text-button" onClick={() => void refresh()} disabled={busy}>تحديث البيانات ↻</button></div>
+              {expenses.length ? <div className="af-table-wrap"><table><thead><tr><th>التاريخ</th><th>البيان</th><th>حساب المصروف</th><th>طريقة الدفع</th><th>المبلغ</th><th>الحالة</th></tr></thead><tbody>{expenses.map((expense) => { const account = accounts.find((a) => a.id === expense.expense_account_id); return <tr key={expense.id}><td>{dateLabel(expense.expense_date)}</td><td>{expense.description}</td><td>{account ? account.code + " — " + account.name_ar : "—"}</td><td>{({cash:"نقداً",bank:"بنك",credit:"آجل",other:"أخرى"} as Record<string,string>)[expense.payment_method] ?? expense.payment_method}</td><td className="af-code">{money(Number(expense.amount))}</td><td><span className="af-status posted">مرحّل</span></td></tr>; })}</tbody></table></div> : <div className="af-empty"><b>لا توجد مصروفات مسجلة</b><p>ابدأ بتسجيل أول مصروف تشغيلي.</p></div>}
             </section>
           </>}
 
