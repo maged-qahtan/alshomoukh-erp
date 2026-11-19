@@ -84,20 +84,18 @@ export default function AutoFinanceDashboard() {
     setAccounts((accountsResult.data ?? []) as Account[]);
     const entryRows = (entriesResult.data ?? []) as Entry[];
     setEntries(entryRows);
-    const postedIds = entryRows.filter((entry) => entry.status === "posted").map((entry) => entry.id);
-    if (postedIds.length) {
-      const { data: journalLines, error: linesError } = await supabase.from("journal_lines")
-        .select("debit,credit").eq("company_id", membership.company_id).in("journal_entry_id", postedIds);
-      if (linesError) setNotice("تم تحميل البيانات الأساسية، لكن تعذر احتساب ملخص الأرصدة.");
-      const rows = journalLines ?? [];
-      setTotals({
-        debit: rows.reduce((sum, row) => sum + Number(row.debit || 0), 0),
-        credit: rows.reduce((sum, row) => sum + Number(row.credit || 0), 0),
-        posted: entryRows.filter((entry) => entry.status === "posted").length,
-        drafts: entryRows.filter((entry) => entry.status === "draft").length,
-      });
-    } else {
+    const { data: summaryRows, error: summaryError } = await supabase.rpc("company_dashboard_summary", { p_company_id: membership.company_id });
+    if (summaryError) {
+      setNotice("تم تحميل البيانات الأساسية، لكن تعذر احتساب ملخص الأرصدة.");
       setTotals({ debit: 0, credit: 0, posted: 0, drafts: entryRows.filter((entry) => entry.status === "draft").length });
+    } else {
+      const summary = Array.isArray(summaryRows) ? summaryRows[0] : summaryRows;
+      setTotals({
+        debit: Number(summary?.total_debit ?? 0),
+        credit: Number(summary?.total_credit ?? 0),
+        posted: Number(summary?.posted_entries ?? 0),
+        drafts: Number(summary?.draft_entries ?? 0),
+      });
     }
     setBusy(false);
   }, [supabase, user]);
