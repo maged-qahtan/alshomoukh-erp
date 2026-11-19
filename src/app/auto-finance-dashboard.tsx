@@ -81,11 +81,11 @@ export default function AutoFinanceDashboard() {
     const membership = memberships?.length === 1 ? memberships[0] : null;
     if (membershipError) {
       setNotice("تعذر التحقق من ارتباط الحساب بالشركة. لا يمكن عرض البيانات.");
-      setCompany(null); setAccounts([]); setEntries([]); setFiscalPeriods([]); setHasFiscalYears(false); setFiscalPeriodId(""); setBusy(false); return;
+      setCompany(null); setAccounts([]); setEntries([]); setExpenses([]); setFiscalPeriods([]); setHasFiscalYears(false); setFiscalPeriodId(""); setBusy(false); return;
     }
     if (!membership) {
       setNotice("هذا الحساب غير مرتبط بشركة نشطة واحدة. لن يتم عرض أي بيانات حتى يتم ربطه بالشركة الصحيحة.");
-      setCompany(null); setAccounts([]); setEntries([]); setFiscalPeriods([]); setHasFiscalYears(false); setFiscalPeriodId(""); setTotals({ debit: 0, credit: 0, posted: 0, drafts: 0 }); setBusy(false); return;
+      setCompany(null); setAccounts([]); setEntries([]); setExpenses([]); setFiscalPeriods([]); setHasFiscalYears(false); setFiscalPeriodId(""); setTotals({ debit: 0, credit: 0, posted: 0, drafts: 0 }); setBusy(false); return;
     }
     const [companyResult, accountsResult, entriesResult, fiscalYearsResult, fiscalPeriodsResult, expensesResult] = await Promise.all([
       supabase.from("companies").select("id,display_name,legal_name,currency_code,timezone").eq("id", membership.company_id).single(),
@@ -124,7 +124,7 @@ export default function AutoFinanceDashboard() {
     setBusy(false);
   }, [supabase, user]);
 
-  useEffect(() => { if (user) void refresh(); else { setCompany(null); setAccounts([]); setEntries([]); setFiscalPeriods([]); setHasFiscalYears(false); setFiscalPeriodId(""); } }, [user, refresh]);
+  useEffect(() => { if (user) void refresh(); else { setCompany(null); setAccounts([]); setEntries([]); setExpenses([]); setFiscalPeriods([]); setHasFiscalYears(false); setFiscalPeriodId(""); } }, [user, refresh]);
 
   async function saveExpense(event: FormEvent) {
     event.preventDefault();
@@ -187,7 +187,7 @@ export default function AutoFinanceDashboard() {
     const { error } = await supabase.auth.signOut();
     setBusy(false);
     if (error) setNotice("تعذر إنهاء الجلسة. حاول مرة أخرى.");
-    else { setUser(null); setCompany(null); setActive("home"); }
+    else { setUser(null); setCompany(null); setExpenses([]); setActive("home"); }
   }
 
   function updateLine(index: number, field: keyof DraftLine, value: string) {
