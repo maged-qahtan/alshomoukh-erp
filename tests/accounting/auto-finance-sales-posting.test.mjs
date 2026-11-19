@@ -5,6 +5,7 @@ import { readFile } from "node:fs/promises";
 const root = new URL("../../database/auto-finance-migrations/", import.meta.url);
 const foundation = await readFile(new URL("20261119164829_add_atomic_daily_sales_posting.sql", root), "utf8");
 const posting = await readFile(new URL("20261119164851_correct_daily_sales_gross_revenue_balancing.sql", root), "utf8");
+const allocationGuard = await readFile(new URL("20261119164912_restrict_daily_sales_to_credit_revenue_accounts.sql", root), "utf8");
 const ui = await readFile(new URL("../../src/app/auto-finance-sales.tsx", import.meta.url), "utf8");
 const dashboard = await readFile(new URL("../../src/app/auto-finance-dashboard.tsx", import.meta.url), "utf8");
 
@@ -27,6 +28,7 @@ test("daily sales use net tenders plus contra-revenue debits to balance gross re
 
 test("daily sales validate revenue allocations and company branch", () => {
   assert.match(posting, /v_allocated<>v_revenue/i);
+  assert.match(allocationGuard, /a\.normal_balance<>'credit'/i);
   assert.match(posting, /a\.account_class<>'revenue'/i);
   assert.match(posting, /b\.company_id=p_company_id and b\.is_active/i);
   assert.match(posting, /insert into public\.daily_sale_allocations/i);
