@@ -43,6 +43,10 @@ The dedicated Supabase project currently records these migrations in its migrati
 - `add_atomic_daily_expense_posting`
 - `guard_posted_daily_expenses`
 - `validate_daily_expense_payment_accounts`
+- `add_atomic_daily_sales_posting`
+- `correct_daily_sales_gross_revenue_balancing`
+
+Daily sales now post through an authenticated SECURITY INVOKER RPC. Payment tender amounts debit cash, bank, or provider-clearing accounts; discounts and returns debit contra-revenue accounts; gross revenue allocations credit active revenue accounts. The operation creates and posts its journal atomically, and posted daily sales are immutable. The sales module is available inside `/auto-finance`.
 
 The latest hardening removes anonymous table grants, removes direct update privileges from journal tables,
 uses an atomic draft-creation RPC, and confines the privileged posting implementation to the non-exposed
